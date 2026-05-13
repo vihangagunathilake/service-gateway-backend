@@ -1,6 +1,7 @@
 <configuration>
 
-    <property name="LOG_PATH" value="/opt/tomcat/logs"/>
+    <!-- Default fallback (used if LOG_PATH is not set) -->
+    <property name="LOG_PATH" value="${LOG_PATH:-logs}"/>
 
     <!-- Console -->
     <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
@@ -9,24 +10,37 @@
         </encoder>
     </appender>
 
-    <!-- File logging -->
-    <appender name="file" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${LOG_PATH}/service-gateway.log</file>
+    <!-- File logging (ONLY for production) -->
+    <springProfile name="production">
+        <appender name="file" class="ch.qos.logback.core.rolling.RollingFileAppender">
 
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>${LOG_PATH}/service-gateway.%d{yyyy-MM-dd}.log</fileNamePattern>
-            <maxHistory>7</maxHistory>
-        </rollingPolicy>
+            <file>${LOG_PATH}/service-gateway.log</file>
 
-        <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n</pattern>
-        </encoder>
-    </appender>
+            <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+                <fileNamePattern>${LOG_PATH}/service-gateway.%d{yyyy-MM-dd}.log</fileNamePattern>
+                <maxHistory>7</maxHistory>
+            </rollingPolicy>
 
-    <!-- Root logger -->
-    <root level="INFO">
-        <appender-ref ref="console"/>
-        <appender-ref ref="file"/>
-    </root>
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n</pattern>
+            </encoder>
+
+        </appender>
+    </springProfile>
+
+    <!-- Root logger for DEVELOPMENT -->
+    <springProfile name="development">
+        <root level="INFO">
+            <appender-ref ref="console"/>
+        </root>
+    </springProfile>
+
+    <!-- Root logger for PRODUCTION -->
+    <springProfile name="production">
+        <root level="INFO">
+            <appender-ref ref="console"/>
+            <appender-ref ref="file"/>
+        </root>
+    </springProfile>
 
 </configuration>

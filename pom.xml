@@ -9,6 +9,7 @@
 		<module>service_module</module>
 		<module>common_module</module>
         <module>job_module</module>
+        <module>dashboard_module</module>
     </modules>
     <parent>
 		<groupId>org.springframework.boot</groupId>

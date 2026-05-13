@@ -7,26 +7,10 @@
         <groupId>com.flex</groupId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
-    <modelVersion>4.0.0</modelVersion>
-
-    <artifactId>web_module</artifactId>
-    <version>1.0.0</version>
-    <name>web_module</name>
-    <packaging>war</packaging>
-    <build>
-        <finalName>service-gateway</finalName>
-    </build>
-
     <dependencies>
         <dependency>
             <groupId>com.flex</groupId>
             <artifactId>common_module</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.flex</groupId>
-            <artifactId>user_module</artifactId>
             <version>0.0.1-SNAPSHOT</version>
             <scope>compile</scope>
         </dependency>
@@ -38,15 +22,19 @@
         </dependency>
         <dependency>
             <groupId>com.flex</groupId>
-            <artifactId>job_module</artifactId>
+            <artifactId>user_module</artifactId>
             <version>0.0.1-SNAPSHOT</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>com.flex</groupId>
-            <artifactId>dashboard_module</artifactId>
+            <artifactId>job_module</artifactId>
             <version>0.0.1-SNAPSHOT</version>
             <scope>compile</scope>
         </dependency>
     </dependencies>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>dashboard_module</artifactId>
+
 </project>

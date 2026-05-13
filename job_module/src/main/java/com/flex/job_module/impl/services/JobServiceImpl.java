@@ -20,7 +20,7 @@ import com.flex.job_module.impl.entities.JobAtPoint;
 import com.flex.job_module.impl.repositories.CustomerRepository;
 import com.flex.job_module.impl.repositories.JobAtPointRepository;
 import com.flex.job_module.impl.repositories.JobRepository;
-import com.flex.job_module.impl.services.helper.JobServiceHelper;
+import com.flex.job_module.impl.services.helper.*;
 import com.flex.service_module.api.http.DTO.BestServicePointForJob;
 import com.flex.service_module.impl.entities.*;
 import com.flex.service_module.impl.repositories.*;
@@ -456,6 +456,9 @@ public class JobServiceImpl implements JobService {
 
                         if (minimumEndTime != null && minimumEndTime.isBefore(nextStartTime)) {
                             bestTime = minimumEndTime;
+                            if (bestTime.isBefore(lastJobTime)) {
+                                bestTime = lastJobTime;
+                            }
                         } else {
                             bestTime = nextStartTime;
                         }
@@ -652,6 +655,12 @@ public class JobServiceImpl implements JobService {
                 LocalTime minimumStartTime = serviceCenter.getCloseTime();
                 LocalTime minimumEndTime = null;
                 LocalTime nextStartTime = serviceCenter.getOpenTime();
+                LocalTime lastJobTime = null;
+
+                long totalServiceTime = services.stream()
+                        .filter(s -> s.getServiceTime() != null)
+                        .mapToLong(s -> s.getServiceTime().toSecondOfDay())
+                        .sum();
 
                 for (com.flex.service_module.impl.entities.Service service : services) {
                     log.info(" ");
@@ -659,7 +668,8 @@ public class JobServiceImpl implements JobService {
                     int i = 0;
                     long minimumServiceTimeFromSec = 86400;
                     ServicePoint suitablePoint = servicePointList.getFirst();
-                    List<JobAtPoint> prevJobs = new ArrayList<>();
+                    LocalTime minimumEndTimeOfPoint = serviceCenter.getCloseTime();
+                    ServicePoint minimumEndTimePoint = null;
 
                     for (ServicePoint servicePoint : servicePointList) {
 
@@ -675,20 +685,27 @@ public class JobServiceImpl implements JobService {
                             // has previous jobs in this point
                             if (!previousJobs.isEmpty()) {
 
-                                prevJobs = previousJobs;
-
                                 List<Integer> prevJobIds = previousJobs.stream().map(
                                         j -> j.getJob().getId()
                                 ).toList();
 
+                                if (minimumEndTimeOfPoint.isAfter(previousJobs.getLast().getEndTime())) {
+                                    minimumEndTimeOfPoint = previousJobs.getLast().getEndTime();
+                                    minimumEndTimePoint = servicePoint;
+                                }
+
                                 // has contains current job id in previous jobs
                                 if (prevJobIds.contains(job.getId())) {
                                     // if has create the dummy entity and break the loop
-                                    nextStartTime = previousJobs.getLast().getEndTime();
+                                    if (!lastJobTime.isAfter(previousJobs.getLast().getEndTime())) {
+                                        nextStartTime = lastJobTime;
+                                    } else {
+                                        nextStartTime = previousJobs.getLast().getEndTime();
+                                    }
 
                                     JobAtPoint createJobAtPoint = jobServiceHelper
                                             .createJobAtPoint(servicePoint, service, job,
-                                                    nextStartTime, true);
+                                                    nextStartTime, minimumEndTimePoint, minimumEndTimeOfPoint, true);
 
                                     if (createJobAtPoint != null) {
                                         log.info("point: {}", servicePoint.getName() + " ✅");
@@ -703,6 +720,7 @@ public class JobServiceImpl implements JobService {
                                         return CONFLICT("Sorry, No available service slots for " + prepareJob.getAppointmentDate());
                                     }
 
+                                    //todo: keep this. Don't know this is for what
                                     if (nextStartTime.isBefore(previousJobs.getLast().getEndTime())) {
                                         log.info("nextStartTime: {}", nextStartTime);
 
@@ -712,6 +730,8 @@ public class JobServiceImpl implements JobService {
 
                                     jobAtPointRepository.save(createJobAtPoint);
                                     jobsAtPoint.add(createJobAtPoint);
+                                    nextStartTime = createJobAtPoint.getEndTime();
+                                    lastJobTime = nextStartTime;
                                     log.info("next start time going to be: {}", nextStartTime);
                                     break;
                                 } else {
@@ -747,10 +767,6 @@ public class JobServiceImpl implements JobService {
                                                 }
                                             }
                                         }
-
-                                        log.info("next ------------------ {}", nextStartTime);
-                                        log.info("last ------------------ {}", previousJobs.getLast().getEndTime());
-
                                         if (nextStartTime.isBefore(minimumEndTime)
                                                 && !hasEmptyPoints) {
                                             nextStartTime = minimumEndTime;
@@ -781,6 +797,7 @@ public class JobServiceImpl implements JobService {
                                 nextStartTime = jobServiceHelper.calculateEndTime(nextStartTime,
                                         service.getServiceTime(), servicePoint.getCloseTime());
 
+                                lastJobTime = nextStartTime;
                                 jobsAtPoint.add(createJobAtPoint);
                                 log.info("next start time going to be: {}", nextStartTime);
                                 break;
@@ -794,41 +811,117 @@ public class JobServiceImpl implements JobService {
                         LocalTime bestTime;
                         LocalTime freeStart = null;
 
-                        // sometimes, there can be some free slots among other jobs.
-                        // so find it and assign this job to that slot.
+                        List<JobAtPoint> prevJobs = jobAtPointRepository.getPendingJobsAtPointByPoint(suitablePoint.getId(),
+                                prepareJob.getAppointmentDate());
+
                         if (!prevJobs.isEmpty()) {
-                            // get intervals
+                            if (lastJobTime != null) {
+                                LocalTime possibleEndTime = jobServiceHelper.calculateEndTime(
+                                        lastJobTime, LocalTime.ofSecondOfDay(totalServiceTime), suitablePoint.getCloseTime()
+                                );
 
-                            long serviceSeconds = service.getServiceTime().toSecondOfDay();
+                                log.info("👉 possible end time: {}", possibleEndTime);
 
-                            LocalTime nextStart = LocalTime.of(8, 0); // default start
+                                boolean isAvailable = false;
 
-                            prevJobs.sort(Comparator.comparing(JobAtPoint::getStartTime));
+                                for (int x = 0; x < prevJobs.size() - 1; x++) {
 
-                            for (JobAtPoint prevJob : prevJobs) {
+                                    JobAtPoint first = prevJobs.get(x);
+                                    JobAtPoint second = prevJobs.get(x + 1);
 
-                                LocalTime jobStart = prevJob.getStartTime();
+                                    if (first.getEndTime() == null || second.getStartTime() == null) {
+                                        continue;
+                                    }
 
-                                // ✅ Check gap from nextStart → jobStart
-                                if (nextStart.isBefore(jobStart)) {
+                                    boolean fitsInGap =
+                                            !lastJobTime.isBefore(first.getEndTime()) &&   // start >= first end
+                                                    !possibleEndTime.isAfter(second.getStartTime()); // end <= second start
 
-                                    long gapSeconds = Duration.between(nextStart, jobStart).getSeconds();
-                                    if (gapSeconds >= serviceSeconds) {
-                                        freeStart = nextStart;
+                                    if (!fitsInGap && !possibleEndTime.isAfter(first.getStartTime())) {
+                                        fitsInGap = true;
+                                    }
+
+                                    if (fitsInGap) {
+                                        isAvailable = true;
                                         break;
+                                    }
+
+                                    long diff = Duration.between(first.getEndTime(), second.getStartTime()).getSeconds();
+
+                                    // There is no free slot is available at exact calculated time
+                                    // But may have free slots after calculated time. Check it
+                                    if (diff >= totalServiceTime) {
+                                        //this is that free slot
+                                        log.info("free time found \uD83D\uDD0D: {} and {}", first.getEndTime(), second.getStartTime());
+                                        freeStart = first.getEndTime();
                                     }
                                 }
 
-                                // Move nextStart forward
-                                LocalTime jobEnd = prevJob.getActualEndTime() != null
-                                        ? prevJob.getActualEndTime()
-                                        : prevJob.getEndTime();
+                                // A free slot is available at exact calculated time
+                                if (isAvailable) {
+                                    log.info("has free slot for middle services ✅");
+                                    long serviceSeconds = service.getServiceTime().toSecondOfDay();
 
-                                if (jobEnd.isAfter(nextStart)) {
-                                    nextStart = jobEnd;
+                                    LocalTime nextStart = lastJobTime; // default start
+
+                                    prevJobs.sort(Comparator.comparing(JobAtPoint::getStartTime));
+
+                                    for (JobAtPoint prevJob : prevJobs) {
+
+                                        LocalTime jobStart = prevJob.getStartTime();
+
+                                        // ✅ Check gap from nextStart → jobStart
+                                        if (nextStart.isBefore(jobStart)) {
+
+                                            long gapSeconds = Duration.between(nextStart, jobStart).getSeconds();
+                                            if (gapSeconds >= serviceSeconds) {
+                                                freeStart = nextStart;
+                                                break;
+                                            }
+                                        }
+
+                                        // Move nextStart forward
+                                        LocalTime jobEnd = prevJob.getActualEndTime() != null
+                                                ? prevJob.getActualEndTime()
+                                                : prevJob.getEndTime();
+
+                                        if (jobEnd.isAfter(nextStart)) {
+                                            nextStart = jobEnd;
+                                        }
+                                    }
+                                }
+
+                            } else {
+                                long serviceSeconds = service.getServiceTime().toSecondOfDay();
+
+                                LocalTime nextStart = serviceCenter.getOpenTime(); // default start
+
+                                prevJobs.sort(Comparator.comparing(JobAtPoint::getStartTime));
+
+                                for (JobAtPoint prevJob : prevJobs) {
+
+                                    LocalTime jobStart = prevJob.getStartTime();
+
+                                    // ✅ Check gap from nextStart → jobStart
+                                    if (nextStart.isBefore(jobStart)) {
+
+                                        long gapSeconds = Duration.between(nextStart, jobStart).getSeconds();
+                                        if (gapSeconds >= serviceSeconds) {
+                                            freeStart = nextStart;
+                                            break;
+                                        }
+                                    }
+
+                                    // Move nextStart forward
+                                    LocalTime jobEnd = prevJob.getActualEndTime() != null
+                                            ? prevJob.getActualEndTime()
+                                            : prevJob.getEndTime();
+
+                                    if (jobEnd.isAfter(nextStart)) {
+                                        nextStart = jobEnd;
+                                    }
                                 }
                             }
-                            //find any suitable interval has
                         }
 
                         if (freeStart != null) {
@@ -836,6 +929,9 @@ public class JobServiceImpl implements JobService {
                         } else {
                             if (minimumEndTime != null && minimumEndTime.isBefore(nextStartTime)) {
                                 bestTime = minimumEndTime;
+                                if (bestTime.isBefore(lastJobTime)) {
+                                    bestTime = lastJobTime;
+                                }
                             } else {
                                 bestTime = nextStartTime;
                             }
@@ -843,7 +939,7 @@ public class JobServiceImpl implements JobService {
 
                         JobAtPoint createJobAtPoint = jobServiceHelper
                                 .createJobAtPoint(suitablePoint, service, job,
-                                        bestTime, true);
+                                        bestTime, minimumEndTimePoint, minimumEndTimeOfPoint, true);
 
                         if (createJobAtPoint != null) {
                             log.info("point: {}", suitablePoint.getName() + " ✅");
@@ -858,7 +954,7 @@ public class JobServiceImpl implements JobService {
                         }
 
                         nextStartTime = createJobAtPoint.getEndTime();
-
+                        lastJobTime = nextStartTime;
                         if (nextStartTime.isBefore(minimumStartTime)) {
                             minimumStartTime = nextStartTime;
                         }

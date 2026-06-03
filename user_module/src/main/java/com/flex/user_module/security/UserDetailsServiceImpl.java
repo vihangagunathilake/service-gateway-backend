@@ -35,19 +35,13 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        log.info("UserDetailsServiceImpl - loadUserByUsername");
         User user = userRepository.findByEmailAndDeletedIsFalse(username);
 
-        List<GrantedAuthority> authorities = new ArrayList<>();
+        List<GrantedAuthority> authorities;
 
         if (user.getRole() == null) {
             throw new MissingRoleException("User has no designation assigned");
         }
-
-        //for check caching
-        boolean cashed = roleCacheService.isPermissionsCached(user.getId());
-        log.info("permissions of the designation " + user.getRole().getId() + " is "
-                + Colors.YELLOW + (cashed ? "cashed" : "not cashed") + Colors.RESET);
 
         List<RolePermission> allPermissionsForDesignation = roleCacheService
                 .cachePermissionsForUser(user.getId(), user.getRole().getId());
@@ -56,7 +50,6 @@ public class UserDetailsServiceImpl implements UserDetailsService {
                 .map(dp -> new SimpleGrantedAuthority(dp.getPermission().getPermission()))
                 .collect(Collectors.toList());
 
-        log.info("user permissions: " + authorities);
         authorities.add(new SimpleGrantedAuthority(String.valueOf(user.getUserType())));
 
         return new org.springframework.security.core.userdetails.User(

@@ -52,6 +52,12 @@ public class UserController {
         return userService.permissions(request);
     }
 
+    @GetMapping("/load-permission-access")
+    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PT)")
+    public ResponseEntity<?> loadPermissionsAccess(HttpServletRequest request) {
+        return userService.permissionsWithAccess(request);
+    }
+
     @PostMapping("/employee-register")
     public ResponseEntity<?> employeeRegister(@RequestBody EmployeeRegister employeeRegister, HttpServletRequest request) {
         return userService.employeeRegister(employeeRegister, request);

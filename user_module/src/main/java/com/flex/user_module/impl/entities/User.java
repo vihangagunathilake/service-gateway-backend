@@ -44,4 +44,8 @@ public class User {
     @JoinColumn(name = "service_center_id")
     private ServiceCenter serviceCenter;
     private boolean deleted;
+
+    public User(Integer id) {
+        this.id = id;
+    }
 }

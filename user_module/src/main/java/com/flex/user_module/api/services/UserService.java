@@ -23,6 +23,8 @@ public interface UserService {
 
     ResponseEntity<?> permissions(HttpServletRequest request);
 
+    ResponseEntity<?> permissionsWithAccess(HttpServletRequest request);
+
     ResponseEntity<?> employeeRegister(EmployeeRegister employeeRegister, HttpServletRequest request);
 
     ResponseEntity<?> getAllUsers(Pagination pagination, HttpServletRequest request);

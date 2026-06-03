@@ -15,5 +15,6 @@ import java.util.List;
 public class RolePermissionsDTO {
     private Integer id;
     private String name;
-    private List<String> permissions = new ArrayList<>();
+    private List<PermissionDTO> permissions = new ArrayList<>();
+    private List<String> notifications = new ArrayList<>();
 }

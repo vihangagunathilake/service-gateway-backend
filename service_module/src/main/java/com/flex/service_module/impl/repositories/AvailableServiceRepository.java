@@ -26,7 +26,7 @@ public interface AvailableServiceRepository extends JpaRepository<AvailableServi
     @Query("SELECT a.service.id FROM AvailableService a WHERE a.servicePoint.serviceCenter.id=:serviceCenterId group by a.service.id")
     List<Integer> findServicesByServiceCenterId(@Param("serviceCenterId") Integer serviceCenterId);
 
-    @Query("SELECT a.service FROM AvailableService a WHERE a.servicePoint.id in (:ids) GROUP BY a.service.id")
+    @Query("SELECT DISTINCT a.service FROM AvailableService a WHERE a.servicePoint.id in (:ids) ")
     List<Service> servicesInPoints(@Param("ids") List<Integer> pointsIds);
 
     @Query("SELECT a.service FROM AvailableService a WHERE a.servicePoint.id=:id GROUP BY a.service.id")

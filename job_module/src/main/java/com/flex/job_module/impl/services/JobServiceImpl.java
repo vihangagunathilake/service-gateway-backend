@@ -14,6 +14,7 @@ import com.flex.job_module.api.http.responses.SubJobDetails;
 import com.flex.job_module.api.services.JobService;
 import com.flex.job_module.constants.JobStatus;
 import com.flex.job_module.constants.JobTypes;
+import com.flex.job_module.events.JobCreatedNotifyEvent;
 import com.flex.job_module.impl.entities.Customer;
 import com.flex.job_module.impl.entities.Job;
 import com.flex.job_module.impl.entities.JobAtPoint;
@@ -21,22 +22,20 @@ import com.flex.job_module.impl.repositories.CustomerRepository;
 import com.flex.job_module.impl.repositories.JobAtPointRepository;
 import com.flex.job_module.impl.repositories.JobRepository;
 import com.flex.job_module.impl.services.helper.*;
-import com.flex.service_module.api.http.DTO.BestServicePointForJob;
 import com.flex.service_module.impl.entities.*;
 import com.flex.service_module.impl.repositories.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.sql.Date;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -68,7 +67,8 @@ public class JobServiceImpl implements JobService {
 
     private final JobServiceHelper jobServiceHelper;
     private final ServicesRepository servicesRepository;
-    private final ServiceProviderRepository serviceProviderRepository;
+
+    private final ApplicationEventPublisher publisher;
 
     @Transactional
     @Override
@@ -456,6 +456,13 @@ public class JobServiceImpl implements JobService {
 
                         if (minimumEndTime != null && minimumEndTime.isBefore(nextStartTime)) {
                             bestTime = minimumEndTime;
+                            log.info("bestTime: {}", bestTime);
+                            log.info("lastJobTime: {}", lastJobTime);
+
+                            if (lastJobTime == null) {
+                                lastJobTime = bestTime;
+                            }
+
                             if (bestTime.isBefore(lastJobTime)) {
                                 bestTime = lastJobTime;
                             }
@@ -981,8 +988,15 @@ public class JobServiceImpl implements JobService {
     }
 
     @Override
+    @Transactional
     public ResponseEntity<?> jobVerification(Integer id, HttpServletRequest request) {
         log.info(request.getRequestURI());
+
+        UserClaims userClaims = JwtUtil.getClaimsFromToken(request);
+
+        if (userClaims == null || userClaims.getUserId() == null) {
+            return CONFLICT("User not found");
+        }
 
         Job job = jobRepository.getJobById(id);
 
@@ -1015,6 +1029,14 @@ public class JobServiceImpl implements JobService {
 
         jobRepository.save(job);
         jobRepository.flush();
+
+        publisher.publishEvent(
+                new JobCreatedNotifyEvent(
+                        job.getId(),
+                        job.getServiceCenter().getId(),
+                        job.getServiceCenter().getName()
+                )
+        );
 
         return SUCCESS("Job Created");
     }

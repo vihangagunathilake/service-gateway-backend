@@ -5,23 +5,29 @@ import com.flex.common_module.security.http.response.UserClaims;
 import com.flex.common_module.security.utils.JwtUtil;
 import com.flex.service_module.impl.entities.ServiceProvider;
 import com.flex.service_module.impl.repositories.ServiceProviderRepository;
+import com.flex.user_module.api.DTO.RoleNotificationView;
 import com.flex.user_module.api.DTO.RolePermissionView;
+import com.flex.user_module.api.DTO.classes.PermissionDTO;
+import com.flex.user_module.api.DTO.classes.RolePermissionDTO;
 import com.flex.user_module.api.DTO.classes.RolePermissionsDTO;
 import com.flex.user_module.api.http.requests.AddRole;
+import com.flex.user_module.api.http.requests.RoleAndPermission;
 import com.flex.user_module.api.services.RoleService;
+import com.flex.user_module.events.RoleCreatedEvent;
+import com.flex.user_module.events.RoleDeleteEvent;
+import com.flex.user_module.events.RoleUpdateEvent;
 import com.flex.user_module.impl.entities.Permission;
 import com.flex.user_module.impl.entities.Role;
 import com.flex.user_module.impl.entities.RolePermission;
-import com.flex.user_module.impl.entities.User;
-import com.flex.user_module.impl.repositories.PermissionRepository;
-import com.flex.user_module.impl.repositories.RolePermissionRepository;
-import com.flex.user_module.impl.repositories.RoleRepository;
-import com.flex.user_module.impl.repositories.UserRepository;
+import com.flex.user_module.impl.entities.RolePermissionAccess;
+import com.flex.user_module.impl.repositories.*;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -44,6 +50,9 @@ public class RoleServiceImpl implements RoleService {
     private final UserRepository userRepository;
     private final ServiceProviderRepository serviceProviderRepository;
     private final RolePermissionRepository rolePermissionRepository;
+    private final RolePermissionAccessRepository rolePermissionAccessRepository;
+
+    private final ApplicationEventPublisher publisher;
 
     @Override
     public ResponseEntity<?> systemPermissions(HttpServletRequest request) {
@@ -52,6 +61,7 @@ public class RoleServiceImpl implements RoleService {
     }
 
     @Override
+    @Transactional
     public ResponseEntity<?> addRole(AddRole addRole, HttpServletRequest request) {
         log.info(request.getRequestURI(), "{} body {}" ,addRole);
 
@@ -93,17 +103,40 @@ public class RoleServiceImpl implements RoleService {
                 .serviceProvider(serviceProvider)
                 .build();
 
+        roleRepository.save(role);
+        roleRepository.flush();
+
         List<RolePermission> rolePermissions = permissions.stream().map(
                 permission -> RolePermission.builder().role(role).permission(permission).build()
         ).toList();
 
-        roleRepository.save(role);
+        List<RolePermissionAccess> rolePermissionAccesses = rolePermissions.stream().map(
+                rolePermission ->
+                        RolePermissionAccess.builder()
+                                .rolePermission(rolePermission)
+                                .build()
+        ).toList();
+
+        // adding role notification is happening in notification_module
+        // this is added to prevent circular dependency
+        publisher.publishEvent(
+                new RoleCreatedEvent(
+                        role.getId(),
+                        addRole.getNotifications()
+                )
+        );
+
         rolePermissionRepository.saveAll(rolePermissions);
+        rolePermissionRepository.flush();
+
+        rolePermissionAccessRepository.saveAll(rolePermissionAccesses);
+        rolePermissionAccessRepository.flush();
 
         return SUCCESS("Role added");
     }
 
     @Override
+    @Transactional
     public ResponseEntity<?> updateRole(AddRole addRole, HttpServletRequest request) {
         log.info(request.getRequestURI(), "{} body {}" ,addRole);
 
@@ -136,26 +169,57 @@ public class RoleServiceImpl implements RoleService {
 
         List<String> rolePermissions = rolePermissionRepository.getRolePermissions(addRole.getRoleId());
 
-        boolean isEqual = new HashSet<>(rolePermissions).equals(new HashSet<>(addRole.getPermissions()));
+        List<String> deletingPermission = rolePermissions.stream().filter(
+                rolePermission -> !addRole.getPermissions().contains(rolePermission)
+        ).toList();
 
-        if (!isEqual) {
+        List<String> addingPermission = addRole.getPermissions().stream().filter(
+                rolePermission -> !rolePermissions.contains(rolePermission)
+        ).toList();
+
+        if (!deletingPermission.isEmpty()) {
             List<RolePermission> deletingRolePermissions = rolePermissionRepository
-                    .getAllRolePermissions(addRole.getRoleId());
+                    .getRolePermissionsByPermissions(addRole.getRoleId(), deletingPermission);
+
+            List<RolePermissionAccess> deletingRolePermissionAccess = rolePermissionAccessRepository
+                    .getPermissionAccessByRolePermissions(deletingRolePermissions);
+
+            rolePermissionAccessRepository.deleteAll(deletingRolePermissionAccess);
 
             rolePermissionRepository.deleteAll(deletingRolePermissions);
+            permissionsUpdated = true;
+        }
 
-            List<Permission> permissions = permissionRepository.getAlPermissionsByPermission(
-                    addRole.getPermissions()
-            );
+        if (!addingPermission.isEmpty()) {
 
-            List<RolePermission> newRolePermissions = permissions.stream().map(
-                    permission -> RolePermission.builder().role(role).permission(permission).build()
+            List<Permission> addingPermissions = permissionRepository.getAlPermissionsByPermission(addingPermission);
+
+            List<RolePermission> newRolePermissions = addingPermissions.stream().map(
+                    permission -> RolePermission.builder()
+                            .role(role)
+                            .permission(permission)
+                            .build()
+            ).toList();
+
+            List<RolePermissionAccess> newRolePermissionAccess = newRolePermissions.stream().map(
+                    rolePermission -> RolePermissionAccess.builder()
+                            .rolePermission(rolePermission)
+                            .build()
             ).toList();
 
             rolePermissionRepository.saveAll(newRolePermissions);
-
+            rolePermissionAccessRepository.saveAll(newRolePermissionAccess);
             permissionsUpdated = true;
         }
+
+        // updating role notification is happening in notification_module
+        // this is added to prevent circular dependency
+        publisher.publishEvent(
+                new RoleUpdateEvent(
+                        role.getId(),
+                        addRole.getNotifications()
+                )
+        );
 
         if (roleUpdated && permissionsUpdated) {
             return SUCCESS("Role and permissions updated");
@@ -174,6 +238,64 @@ public class RoleServiceImpl implements RoleService {
     }
 
     @Override
+    public ResponseEntity<?> updateRolePermissionAccess(com.flex.user_module.api.http.requests.RolePermissionAccess rolePermissionAccess,
+                                                        HttpServletRequest request) {
+        log.info(request.getRequestURI());
+
+        if (!rolePermissionRepository.existsById(rolePermissionAccess.getRolePermissionId())) {
+            log.error("{} not found", rolePermissionAccess.getRolePermissionId());
+            return CONFLICT("Role permission not found");
+        }
+
+        RolePermissionAccess existingRolePermissionAccess = rolePermissionAccessRepository
+                .findRolePermissionAccessByRolePermissionId(rolePermissionAccess.getRolePermissionId());
+
+        if (existingRolePermissionAccess == null) {
+            return CONFLICT("Role permission access not found");
+        }
+
+        log.info("si??????? {} ", rolePermissionAccess.isAssign());
+
+        existingRolePermissionAccess.setAdd_permission(rolePermissionAccess.isAdd());
+        existingRolePermissionAccess.setUpdate_permission(rolePermissionAccess.isUpdate());
+        existingRolePermissionAccess.setDelete_permission(rolePermissionAccess.isDelete());
+        existingRolePermissionAccess.setGet_permission(rolePermissionAccess.isGet());
+        existingRolePermissionAccess.setGetAll_permission(rolePermissionAccess.isGetAll());
+        existingRolePermissionAccess.setAssign_permission(rolePermissionAccess.isAssign());
+        existingRolePermissionAccess.setAll_permission(rolePermissionAccess.isAll());
+
+        rolePermissionAccessRepository.save(existingRolePermissionAccess);
+
+        return SUCCESS("Permission access updated");
+    }
+
+    @Override
+    public ResponseEntity<?> getRolePermissionAccess(RoleAndPermission roleAndPermission, HttpServletRequest request) {
+        log.info(request.getRequestURI());
+
+        RolePermission rolePermission = rolePermissionRepository
+                .findByRoleIdAndPermission_Permission(roleAndPermission.getRoleId(), roleAndPermission.getPermission());
+
+        if (rolePermission == null) {
+            return CONFLICT("Role permission not found");
+        }
+
+        RolePermissionAccess existingRolePermissionAccess = rolePermissionAccessRepository
+                .findRolePermissionAccessByRolePermissionId(rolePermission.getId());
+
+        if (existingRolePermissionAccess == null) {
+            existingRolePermissionAccess = RolePermissionAccess.builder()
+                    .rolePermission(rolePermission)
+                    .build();
+
+            existingRolePermissionAccess = rolePermissionAccessRepository.save(existingRolePermissionAccess);
+        }
+
+        return DATA(existingRolePermissionAccess);
+    }
+
+    @Override
+    @Transactional
     public ResponseEntity<?> deleteRole(Integer id, HttpServletRequest request) {
         log.info(request.getRequestURI(), "{} id {}" ,id);
 
@@ -195,6 +317,14 @@ public class RoleServiceImpl implements RoleService {
                 .getAllRolePermissions(id);
 
         rolePermissionRepository.deleteAll(rolePermissions);
+
+        // deleting role notification is happening in notification_module
+        // this is added to prevent circular dependency
+        publisher.publishEvent(
+                new RoleDeleteEvent(
+                        role.getId()
+                )
+        );
 
         return SUCCESS("Role deleted");
     }
@@ -218,17 +348,54 @@ public class RoleServiceImpl implements RoleService {
 
         List<RolePermissionView> rolePermissionViews = roleRepository.findRolesWithPermissions(serviceProvider.getId());
 
+        List<RoleNotificationView> roleNotificationViews =
+                roleRepository.findRolesWithNotifications(serviceProvider.getId());
+
         Map<Integer, RolePermissionsDTO> roleMap = new LinkedHashMap<>();
 
+        // permissions
         for (RolePermissionView row : rolePermissionViews) {
-            roleMap.computeIfAbsent(
+
+            RolePermissionsDTO dto = roleMap.computeIfAbsent(
                     row.getRoleId(),
-                    roleId -> new RolePermissionsDTO(roleId, row.getRoleName(), new ArrayList<>())
+                    id -> new RolePermissionsDTO(
+                            id,
+                            row.getRoleName(),
+                            new ArrayList<>(),
+                            new ArrayList<>()
+                    )
             );
 
-            roleMap.get(row.getRoleId())
-                    .getPermissions()
-                    .add(row.getPermissionName());
+            if (row.getPermissionName() != null &&
+                    dto.getPermissions().stream()
+                            .noneMatch(p -> p.getName().equals(row.getPermissionName()))) {
+
+                dto.getPermissions().add(
+                        PermissionDTO.builder()
+                                .name(row.getPermissionName())
+                                .allowed(Boolean.TRUE.equals(row.getAccessSet()))
+                                .build()
+                );
+            }
+        }
+
+        // notifications
+        for (RoleNotificationView row : roleNotificationViews) {
+
+            RolePermissionsDTO dto = roleMap.computeIfAbsent(
+                    row.getRoleId(),
+                    id -> new RolePermissionsDTO(
+                            id,
+                            row.getRoleName(),
+                            new ArrayList<>(),
+                            new ArrayList<>()
+                    )
+            );
+
+            if (row.getNotificationName() != null &&
+                    !dto.getNotifications().contains(row.getNotificationName())) {
+                dto.getNotifications().add(row.getNotificationName());
+            }
         }
 
         return DATA(new ArrayList<>(roleMap.values()));
@@ -246,7 +413,7 @@ public class RoleServiceImpl implements RoleService {
 
         List<String> rolePermissions = rolePermissionRepository.getRolePermissions(id);
 
-        RolePermissionsDTO rolePermissionsDTO = RolePermissionsDTO.builder()
+        RolePermissionDTO rolePermissionsDTO = RolePermissionDTO.builder()
                 .id(role.getId())
                 .name(role.getRole())
                 .permissions(rolePermissions)

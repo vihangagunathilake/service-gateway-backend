@@ -150,13 +150,6 @@ public class SCServiceImpl implements SCService {
             return CONFLICT("User not found");
         }
 
-        ServiceProvider provider = serviceProviderRepository
-                .findByProviderIdAndDeletedIsFalse(userClaims.getProvider());
-
-        if (provider == null) {
-            return CONFLICT("Service provider not found");
-        }
-
         Sort sort = Sort.by(Sorting.getSort(pagination.getSort()));
 
         Pageable pageable = PageRequest.of(
@@ -167,12 +160,29 @@ public class SCServiceImpl implements SCService {
 
         Page<ServiceCenter> result;
 
-        if (pagination.getSearchText() == null || pagination.getSearchText().trim().isEmpty()) {
-            result = serviceCenterRepository
-                    .findByServiceProvider_IdAndDeletedFalse(provider.getId(), pageable);
+        //this is ok
+        Integer serviceCenterId = serviceCenterRepository.findByServiceUserId(
+                userClaims.getUserId()
+        );
+
+        if (serviceCenterId == null) {
+            ServiceProvider provider = serviceProviderRepository
+                    .findByProviderIdAndDeletedIsFalse(userClaims.getProvider());
+
+            if (provider == null) {
+                return CONFLICT("Service provider not found");
+            }
+
+            if (pagination.getSearchText() == null || pagination.getSearchText().trim().isEmpty()) {
+                result = serviceCenterRepository
+                        .findByServiceProvider_IdAndDeletedFalse(provider.getId(), pageable);
+            } else {
+                result = serviceCenterRepository
+                        .searchCenters(provider.getId(), pagination.getSearchText().trim(), pageable);
+            }
         } else {
             result = serviceCenterRepository
-                    .searchCenters(provider.getId(), pagination.getSearchText().trim(), pageable);
+                    .findByIdAndDeletedFalse(serviceCenterId, pageable);
         }
 
         return DATA(
@@ -239,14 +249,25 @@ public class SCServiceImpl implements SCService {
             return CONFLICT("User not found");
         }
 
-        ServiceProvider provider = serviceProviderRepository
-                .findByProviderIdAndDeletedIsFalse(userClaims.getProvider());
+        //this is ok
+        Integer serviceCenterId = serviceCenterRepository.findByServiceUserId(
+                userClaims.getUserId()
+        );
 
-        if (provider == null) {
-            return CONFLICT("Service provider not found");
+        if (serviceCenterId == null) {
+            ServiceProvider provider = serviceProviderRepository
+                    .findByProviderIdAndDeletedIsFalse(userClaims.getProvider());
+
+            if (provider == null) {
+                return CONFLICT("Service provider not found");
+            }
+
+            return DATA(serviceCenterRepository.findCentersForDropdown(provider.getId()));
+        } else {
+            return DATA(serviceCenterRepository.singleBranchDropdown(serviceCenterId));
         }
 
-        return DATA(serviceCenterRepository.findCentersForDropdown(provider.getId()));
+
     }
 
     @Override

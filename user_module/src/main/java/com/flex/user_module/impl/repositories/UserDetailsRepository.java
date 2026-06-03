@@ -18,4 +18,6 @@ public interface UserDetailsRepository extends JpaRepository<UserDetails, Intege
     boolean existsByContact(String contact);
 
     UserDetails findByUser_id(Integer userId);
+
+
 }

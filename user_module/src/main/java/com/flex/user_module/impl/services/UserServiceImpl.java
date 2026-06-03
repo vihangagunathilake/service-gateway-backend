@@ -19,20 +19,23 @@ import com.flex.user_module.api.http.responses.UserData;
 import com.flex.user_module.api.http.responses.UserProfileData;
 import com.flex.user_module.api.services.UserService;
 import com.flex.user_module.cache.RoleCacheService;
+import com.flex.user_module.events.UserCreatedEvent;
+import com.flex.user_module.events.UserUpdatedEvent;
 import com.flex.user_module.impl.entities.*;
+import com.flex.user_module.impl.entities.RolePermissionAccess;
 import com.flex.user_module.impl.repositories.*;
 import com.flex.user_module.impl.services.helpers.UserServiceHelper;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.tomcat.util.buf.UDecoder;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.awt.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.List;
@@ -58,6 +61,8 @@ public class UserServiceImpl implements UserService {
     private final UserServiceHelper userServiceHelper;
     private final RoleCacheService roleCacheService;
 
+    private final ApplicationEventPublisher publisher;
+
     private final ServiceProviderRepository serviceProviderRepository;
     private final ServiceCenterRepository serviceCenterRepository;
     private final UserRepository userRepository;
@@ -67,14 +72,15 @@ public class UserServiceImpl implements UserService {
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private final RolePermissionRepository rolePermissionRepository;
+    private final RolePermissionAccessRepository rolePermissionAccessRepository;
+
 
     @Override
     public ResponseEntity<?> register(Register register, HttpServletRequest request) {
         log.info(request.getRequestURI(), "{} body - {}", register);
 
         if (serviceProviderRepository.existsByNameAndEmailAndDeletedIsFalse(
-                register.getProvider(), register.getProviderEmail()
-        )) {
+                register.getProvider(), register.getProviderEmail())) {
             return CONFLICT("Service provider already registered");
         }
 
@@ -82,7 +88,7 @@ public class UserServiceImpl implements UserService {
             return CONFLICT("User already registered");
         }
 
-        //create permissions for admin
+        // create permissions for admin
         List<Permission> permissions = permissionRepository.findAll();
 
         if (permissions.isEmpty()) {
@@ -95,7 +101,7 @@ public class UserServiceImpl implements UserService {
                 .substring(0, 8)
                 .toUpperCase();
 
-        //create service provider entity
+        // create service provider entity
         ServiceProvider serviceProvider = ServiceProvider.builder()
                 .name(register.getProvider())
                 .email(register.getProviderEmail())
@@ -107,7 +113,7 @@ public class UserServiceImpl implements UserService {
 
         ServiceProvider savedSP = serviceProviderRepository.save(serviceProvider);
 
-        //create service center entity if has no other centers
+        // create service center entity if has no other centers
         if (!register.isHasMultipleBranches()) {
             ServiceCenter serviceCenter = ServiceCenter.builder()
                     .name(serviceProvider.getName())
@@ -116,17 +122,23 @@ public class UserServiceImpl implements UserService {
             serviceCenterRepository.save(serviceCenter);
         }
 
-        //create admin entity
-        Role admin = Role.builder().
-                role("Admin")
+        // create admin entity
+        Role admin = Role.builder().role("Admin")
                 .serviceProvider(savedSP)
                 .build();
 
         List<RolePermission> rolePermissions = permissions.stream().map(
-                p -> RolePermission.builder().role(admin).permission(p).build()
-        ).collect(Collectors.toList());
+                p -> RolePermission.builder().role(admin).permission(p).build()).collect(Collectors.toList());
 
-        //create user entity for admin
+        List<RolePermissionAccess> rolePermissionAccesses = rolePermissions.stream().map(
+                rolePermission ->
+                        RolePermissionAccess.builder()
+                                .all_permission(true)
+                                .rolePermission(rolePermission)
+                                .build()
+        ).toList();
+
+        // create user entity for admin
         User user = User.builder()
                 .fName(register.getAdminFName())
                 .lName(register.getAdminLName())
@@ -145,13 +157,14 @@ public class UserServiceImpl implements UserService {
 
         roleRepository.save(admin);
         rolePermissionRepository.saveAll(rolePermissions);
+        rolePermissionAccessRepository.saveAll(rolePermissionAccesses);
         userRepository.save(user);
         userDetailsRepository.save(userDetails);
 
         return SUCCESS("Registration Completed. Please login");
     }
 
-    //todo create a service for customer registration - google OAuth
+    // todo create a service for customer registration - google OAuth
 
     @Override
     public ResponseEntity<?> login(Login login, HttpServletRequest request) {
@@ -171,7 +184,8 @@ public class UserServiceImpl implements UserService {
             return CONFLICT("Invalid role");
         }
 
-        //if has any previous login with no logout(logged in and close the browser without logout)
+        // if has any previous login with no logout(logged in and close the browser
+        // without logout)
         // , logout from every login
         userServiceHelper.logoutFromPreviousLogins(user.getId());
 
@@ -243,14 +257,13 @@ public class UserServiceImpl implements UserService {
                 HeaderData.builder()
                         .userType(user.getUserType() == 0 ? "USER"
                                 : user.getUserType() == 1 ? "ADMIN"
-                                : "CUSTOMER")
+                                        : "CUSTOMER")
                         .email(user.getEmail())
                         .providerId(user.getServiceProvider().getProviderId())
                         .serviceCenter(user.getServiceProvider().getName())
                         .userName(user.getFName())
                         .image(null)
-                        .build()
-        );
+                        .build());
     }
 
     @Override
@@ -281,10 +294,30 @@ public class UserServiceImpl implements UserService {
         }
 
         List<Integer> permissionIds = permissions.stream().map(
-                r -> r.getPermission().getId()
-        ).collect(Collectors.toList());
+                r -> r.getPermission().getId()).collect(Collectors.toList());
 
         return DATA(permissionRepository.getPermissionsByIds(permissionIds));
+    }
+
+    @Override
+    public ResponseEntity<?> permissionsWithAccess(HttpServletRequest request) {
+        UserClaims userClaims = JwtUtil.getClaimsFromToken(request);
+
+        if (userClaims == null || userClaims.getUserId() == null) {
+            return CONFLICT("User not found");
+        }
+
+        User user = userRepository.findByIdAndDeletedIsFalse(userClaims.getUserId());
+
+        if (user == null) {
+            return CONFLICT("User not found");
+        }
+
+        if (user.getRole() == null || user.getRole().isDeleted()) {
+            return CONFLICT("User has no role");
+        }
+
+        return DATA(userRepository.getUserPermissionAccess(user.getId()));
     }
 
     @Override
@@ -299,8 +332,7 @@ public class UserServiceImpl implements UserService {
         }
 
         UserDetails prevUserDetails = userDetailsRepository.findByNic(
-                CryptoUtil.encrypt(employeeRegister.getNic())
-        );
+                CryptoUtil.encrypt(employeeRegister.getNic()));
 
         if (prevUserDetails != null
                 && !prevUserDetails.getUser().isDeleted()
@@ -362,8 +394,7 @@ public class UserServiceImpl implements UserService {
         Pageable pageable = PageRequest.of(
                 pagination.getPage(),
                 pagination.getSize(),
-                sort
-        );
+                sort);
 
         String search = "";
 
@@ -380,9 +411,7 @@ public class UserServiceImpl implements UserService {
                         serviceProvider.getId(),
                         search,
                         userClaims.getUserId(),
-                        pageable
-                ).getContent()
-        );
+                        pageable).getContent());
     }
 
     @Override
@@ -445,6 +474,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public ResponseEntity<?> addUser(AddUser addUser, HttpServletRequest request) {
         log.info(request.getRequestURI(), "{} body - {}", addUser);
 
@@ -506,12 +536,22 @@ public class UserServiceImpl implements UserService {
                 .userType(userType)
                 .build();
 
+        // adding role notification is happening in notification_module
+        // this is added to prevent circular dependency
+//        publisher.publishEvent(
+//                new UserCreatedEvent(
+//                        user
+//                )
+//        );
+
         UserDetails userDetails = UserDetails.builder()
                 .user(user)
                 .nic(addUser.getNic() != null && !addUser.getNic().isEmpty()
-                        ? CryptoUtil.encrypt(addUser.getNic()) : null)
+                        ? CryptoUtil.encrypt(addUser.getNic())
+                        : null)
                 .contact(addUser.getNic() != null && !addUser.getNic().isEmpty()
-                        ? CryptoUtil.encrypt(addUser.getContact()) : null)
+                        ? CryptoUtil.encrypt(addUser.getContact())
+                        : null)
                 .addedTime(new Date())
                 .build();
 
@@ -527,7 +567,7 @@ public class UserServiceImpl implements UserService {
 
         return SUCCESS("Registration Completed");
     }
-    
+
     @Override
     public ResponseEntity<?> getUser(Integer userId, HttpServletRequest request) {
         log.info(request.getRequestURI(), "{} user - {}", userId);
@@ -551,8 +591,7 @@ public class UserServiceImpl implements UserService {
                         .serviceCenterId(user.getServiceCenter() != null ? user.getServiceCenter().getId() : null)
                         .nic(userDetails.getNic() != null ? CryptoUtil.decrypt(userDetails.getNic()) : null)
                         .contact(userDetails.getContact() != null ? CryptoUtil.decrypt(userDetails.getContact()) : null)
-                        .build()
-        );
+                        .build());
     }
 
     @Override
@@ -584,8 +623,7 @@ public class UserServiceImpl implements UserService {
                         .serviceCenterId(user.getServiceCenter() != null ? user.getServiceCenter().getId() : null)
                         .nic(userDetails.getNic() != null ? CryptoUtil.decrypt(userDetails.getNic()) : null)
                         .contact(userDetails.getContact() != null ? CryptoUtil.decrypt(userDetails.getContact()) : null)
-                        .build()
-        );
+                        .build());
     }
 
     @Override
@@ -606,8 +644,6 @@ public class UserServiceImpl implements UserService {
 
         String userType;
 
-        log.info(Colors.YELLOW + user.getUserType() + Colors.RESET);
-
         if (user.getUserType() == 1) {
             userType = "ADMIN";
         } else if (user.getUserType() == 2) {
@@ -615,8 +651,6 @@ public class UserServiceImpl implements UserService {
         } else {
             userType = "USER";
         }
-
-        log.info(Colors.YELLOW + userType + Colors.RESET);
 
         return DATA(
                 UserProfileData.builder()
@@ -629,11 +663,11 @@ public class UserServiceImpl implements UserService {
                         .nic(userDetails.getNic() != null ? CryptoUtil.decrypt(userDetails.getNic()) : null)
                         .contact(userDetails.getContact() != null ? CryptoUtil.decrypt(userDetails.getContact()) : null)
                         .joinedDate(new SimpleDateFormat("MMM dd, yyyy").format(userDetails.getAddedTime()))
-                        .build()
-        );
+                        .build());
     }
 
     @Override
+    @Transactional
     public ResponseEntity<?> updateUser(AddUser updateUser, HttpServletRequest request) {
         log.info(request.getRequestURI(), "{} body - {}", updateUser);
 
@@ -646,7 +680,7 @@ public class UserServiceImpl implements UserService {
         UserDetails existingUserDetails = userDetailsRepository.findByUser_id(updateUser.getUserId());
 
         if (updateUser.getFirstName() != null && !updateUser.getFirstName().isEmpty() &&
-            !existingUser.getFName().equals(updateUser.getFirstName())) {
+                !existingUser.getFName().equals(updateUser.getFirstName())) {
             existingUser.setFName(updateUser.getFirstName());
         }
 
@@ -677,6 +711,12 @@ public class UserServiceImpl implements UserService {
                 && !existingUser.getRole().getId().equals(updateUser.getRoleId())
                 && roleRepository.existsByIdAndDeletedIsFalse(updateUser.getRoleId())) {
             existingUser.setRole(new Role(updateUser.getRoleId()));
+
+//            publisher.publishEvent(
+//                    new UserUpdatedEvent(
+//                            existingUser
+//                    )
+//            );
         }
 
         if (existingUser.getServiceCenter() != null) {
@@ -851,8 +891,8 @@ public class UserServiceImpl implements UserService {
                         .contact(CryptoUtil.decrypt(u.getContact()))
                         .email(u.getEmail())
                         .role(u.getRole())
-                        .build()
-        ).toList();
+                        .build())
+                .toList();
 
         return DATA(centerUsersList);
     }

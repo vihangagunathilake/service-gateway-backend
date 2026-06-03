@@ -14,6 +14,8 @@ public class SecurityConstants {
             "/user/register",
             "/user/logout",
             "/user/employee-register",
+            "/ws/**",
+            "/service-gateway/ws/**",
             "/actuator/**"
     };
 }

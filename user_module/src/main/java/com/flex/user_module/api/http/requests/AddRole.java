@@ -18,4 +18,5 @@ public class AddRole {
     private Integer roleId;
     private String roleName;
     private List<String> permissions;
+    private List<Integer> notifications;
 }

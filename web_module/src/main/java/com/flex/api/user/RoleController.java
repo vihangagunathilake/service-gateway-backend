@@ -1,6 +1,8 @@
 package com.flex.api.user;
 
 import com.flex.user_module.api.http.requests.AddRole;
+import com.flex.user_module.api.http.requests.RoleAndPermission;
+import com.flex.user_module.api.http.requests.RolePermissionAccess;
 import com.flex.user_module.api.services.RoleService;
 import com.flex.user_module.constants.PermissionConstant;
 import jakarta.servlet.http.HttpServletRequest;
@@ -40,6 +42,19 @@ public class RoleController {
         return roleService.updateRole(addRole, request);
     }
 
+    @PostMapping("/update-permission-access")
+    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PA)")
+    public ResponseEntity<?> updateRolePermissionAccess(@RequestBody RolePermissionAccess rolePermissionAccess, HttpServletRequest request) {
+        return roleService.updateRolePermissionAccess(rolePermissionAccess, request);
+    }
+
+    @PostMapping("/permission-access")
+    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PA)")
+    public ResponseEntity<?> getPermissionAccess(@RequestBody RoleAndPermission roleAndPermission,
+                                                 HttpServletRequest request) {
+        return roleService.getRolePermissionAccess(roleAndPermission, request);
+    }
+
     @DeleteMapping("/{id}/delete")
     @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).RM)")
     public ResponseEntity<?> deleteRole(@PathVariable("id") Integer id, HttpServletRequest request) {
@@ -47,7 +62,7 @@ public class RoleController {
     }
 
     @GetMapping("/get-all")
-    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).RM)")
+    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PT)")
     public ResponseEntity<?> getAll(HttpServletRequest request) {
         return roleService.getAllRoles(request);
     }

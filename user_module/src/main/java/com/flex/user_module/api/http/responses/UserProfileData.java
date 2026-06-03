@@ -20,4 +20,15 @@ public class UserProfileData {
     private String contact;
     private String joinedDate;
     private String imageUrl;
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class Notifications {
+        private Integer type;
+        private String title;
+        private String content;
+        private boolean disabled;
+    }
 }

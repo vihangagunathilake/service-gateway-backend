@@ -1,12 +1,16 @@
 package com.flex.common_module.security.services;
 
 import com.flex.common_module.constants.Colors;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -20,7 +24,6 @@ import java.util.stream.Collectors;
 @Component("securityService")
 public class SecurityService {
     public boolean hasAnyAccess(String... permissions) {
-        log.info("SecurityService - hasAnyAccess");
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
         if (auth == null || !auth.isAuthenticated()) {
@@ -37,15 +40,22 @@ public class SecurityService {
                 .collect(Collectors.toSet());
 
         for (String required : permissions) {
-            log.info("permission: " + required);
-            log.info("grantedAuthorities: " + grantedAuthorities);
             if (grantedAuthorities.contains(required)) {
-                log.info("✅ Has permission");
                 return true;
             }
         }
 
-        log.warn(Colors.YELLOW + "No permission found" + Colors.RESET);
+        //this part for debug
+        ServletRequestAttributes attributes =
+                (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+
+        if (attributes != null) {
+            HttpServletRequest request = attributes.getRequest();
+
+            log.warn("Access deny for {}", request.getRequestURI());
+        }
+
+        log.error(Colors.YELLOW + "No {} found" + Colors.RESET, Arrays.toString(permissions));
         return false;
     }
 }

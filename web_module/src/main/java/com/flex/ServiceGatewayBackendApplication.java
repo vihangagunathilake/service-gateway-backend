@@ -14,7 +14,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 				"com.flex.service_module",
 				"com.flex.user_module",
 				"com.flex.job_module",
-				"com.flex.dashboard_module"
+				"com.flex.dashboard_module",
+				"com.flex.notification_module"
 		}
 )
 @EnableCaching

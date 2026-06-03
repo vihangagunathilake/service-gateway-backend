@@ -4,4 +4,5 @@ public interface RolePermissionView {
     Integer getRoleId();
     String getRoleName();
     String getPermissionName();
+    Boolean getAccessSet();
 }

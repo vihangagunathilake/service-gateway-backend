@@ -36,6 +36,11 @@ public interface ServiceCenterRepository extends JpaRepository<ServiceCenter, In
             Pageable pageable
     );
 
+    Page<ServiceCenter> findByIdAndDeletedFalse(
+            Integer id,
+            Pageable pageable
+    );
+
     @Query(
             "SELECT sc FROM ServiceCenter sc " +
                     "WHERE sc.serviceProvider.id = :providerId " +
@@ -78,5 +83,29 @@ public interface ServiceCenterRepository extends JpaRepository<ServiceCenter, In
     List<ServiceCentersDropdown> findCentersForDropdown(
             @Param("providerId") Integer providerId
     );
+
+    @Query(
+            value = "SELECT c.id AS id, " +
+                    "c.name AS name, " +
+                    "c.location AS location " +
+                    "FROM service_centers c " +
+                    "WHERE c.id = :id " +
+                    "AND c.deleted = false",
+            nativeQuery = true
+    )
+    List<ServiceCentersDropdown> singleBranchDropdown(
+            @Param("id") Integer id
+    );
+
+    //this is ok. this is done because prevent circular dependency issue
+    @Query("""
+        SELECT s.id
+        FROM ServiceCenter s
+        JOIN User u ON u.serviceCenter.id = s.id
+        WHERE u.id = :userId
+        AND s.deleted = false
+        AND u.deleted = false
+    """)
+    Integer findByServiceUserId(@Param("userId") Integer userId);
 }
 

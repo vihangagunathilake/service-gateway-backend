@@ -1,0 +1,7 @@
+job-created
+
+bin/kafka-topics.sh --create \
+  --topic job-created \
+  --bootstrap-server localhost:9092 \
+  --partitions 1 \
+  --replication-factor 1

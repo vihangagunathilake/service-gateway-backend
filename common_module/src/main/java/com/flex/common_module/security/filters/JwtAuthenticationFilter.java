@@ -47,6 +47,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {private stati
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
+        String path = request.getServletPath();
+
+        // ✅ WebSocket bypass
+        if (path.startsWith("/ws") || path.startsWith("/service-gateway/ws")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         String authHeader = request.getHeader("Authorization");
 
         if (EXCLUDED_PATHS.contains(request.getServletPath())) {

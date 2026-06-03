@@ -2,6 +2,7 @@ package com.flex.user_module.impl.repositories;
 
 import com.flex.user_module.api.DTO.CenterUsers;
 import com.flex.user_module.api.DTO.UserDropdown;
+import com.flex.user_module.api.DTO.UserPermissionAccessView;
 import com.flex.user_module.api.DTO.UsersList;
 import com.flex.user_module.impl.entities.User;
 import org.springframework.data.domain.Page;
@@ -89,4 +90,37 @@ public interface UserRepository extends JpaRepository<User, Integer> {
             "AND u.userType <> 1 AND u.deleted is false")
     List<UserDropdown> getNonAssignedUsers(@Param("providerId") Integer serviceProviderId,
                                            @Param("centerId") Integer serviceCenterId);
+
+    @Query("""
+        SELECT
+            p.permission AS permission,
+    
+            rpa.add_permission AS adding,
+            rpa.update_permission AS updating,
+            rpa.delete_permission AS deleting,
+            rpa.get_permission AS getting,
+            rpa.getAll_permission AS getAll,
+            rpa.assign_permission AS assigning,
+            rpa.all_permission AS allowAll
+    
+        FROM User u
+    
+        LEFT JOIN Role r
+            ON u.role.id = r.id
+    
+        LEFT JOIN RolePermission rp
+            ON r.id = rp.role.id
+    
+        LEFT JOIN Permission p
+            ON rp.permission.id = p.id
+    
+        LEFT JOIN RolePermissionAccess rpa
+            ON rpa.rolePermission.id = rp.id
+    
+        WHERE r.id IS NOT NULL
+        AND u.id = :userId
+    """)
+    List<UserPermissionAccessView> getUserPermissionAccess(
+            @Param("userId") Integer userId
+    );
 }

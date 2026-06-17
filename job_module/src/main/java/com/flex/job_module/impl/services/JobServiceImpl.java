@@ -3,14 +3,12 @@ package com.flex.job_module.impl.services;
 import com.flex.common_module.constants.Colors;
 import com.flex.common_module.security.http.response.UserClaims;
 import com.flex.common_module.security.utils.JwtUtil;
+import com.flex.job_module.api.http.DTO.JobDetailsV1;
 import com.flex.job_module.api.http.DTO.JobTimelineProjection;
 import com.flex.job_module.api.http.DTO.MinimumServiceTimePoint;
 import com.flex.job_module.api.http.requests.PointJobs;
 import com.flex.job_module.api.http.requests.PrepareJob;
-import com.flex.job_module.api.http.responses.JobDetails;
-import com.flex.job_module.api.http.responses.JobsSchedule;
-import com.flex.job_module.api.http.responses.PreparedJob;
-import com.flex.job_module.api.http.responses.SubJobDetails;
+import com.flex.job_module.api.http.responses.*;
 import com.flex.job_module.api.services.JobService;
 import com.flex.job_module.constants.JobStatus;
 import com.flex.job_module.constants.JobTypes;
@@ -502,6 +500,7 @@ public class JobServiceImpl implements JobService {
             LocalTime appointmentTime = null;
             if (!allStartTimes.isEmpty()) {
                 appointmentTime = allStartTimes.stream().min(LocalTime::compareTo).get();
+                log.info("appointmentTime: {}", appointmentTime);
             }
 
             job.setAppointmentTime(appointmentTime);
@@ -1249,6 +1248,65 @@ public class JobServiceImpl implements JobService {
         }
 
         return DATA(null);
+    }
+
+    @Override
+    public ResponseEntity<?> dateWiseJobs(PointJobs pointJobs, HttpServletRequest request) {
+        log.info(request.getRequestURI());
+
+        ServiceCenter serviceCenter = serviceCenterRepository.findByIdAndDeletedIsFalse(pointJobs.getServiceCenter());
+
+        if (serviceCenter == null) {
+            return CONFLICT("Service center not found");
+        }
+
+        List<JobListDetails> jobListDetailsList = new ArrayList<>();
+
+        List<JobDetailsV1> jobDetails = jobRepository
+                .getJobDetailsLimitedData(pointJobs.getServiceCenter(), pointJobs.getDate());
+
+        for (JobDetailsV1 jobDetail : jobDetails) {
+            JobListDetails jobListDetails = new JobListDetails();
+            // set job id
+            jobListDetails.setJobId(jobDetail.getJobId());
+
+            // find services workflow or custom
+            if (jobDetail.getService() != null) {
+                //cluster
+                Cluster cluster = clusterRepository.findByIdAndDeletedIsFalse(jobDetail.getService());
+
+                jobListDetails.setService(cluster.getName());
+
+            } else {
+                jobListDetails.setService("Custom");
+            }
+
+            List<JobAtPoint> jobAtPoints = jobAtPointRepository.findAllByJobId(jobDetail.getJobId());
+
+            // find service point
+            List<String> servicePoints = jobAtPoints.stream().map(j -> j.getServicePoint().getName()).toList();
+            jobListDetails.setPoints(servicePoints);
+
+            List<String> services = jobAtPoints.stream().map(j -> j.getService().getName()).toList();
+            jobListDetails.setServices(services);
+
+            // find service slot
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("hh:mm a");
+
+            LocalTime startTime = jobAtPoints.getFirst().getStartTime();
+            LocalTime endTime = jobAtPoints.getLast().getEndTime();
+
+            jobListDetails.setTimeSlot(
+                    startTime.format(formatter) + " - " + endTime.format(formatter)
+            );
+
+            // find status
+            jobListDetails.setStatus(jobDetail.getStatus());
+
+            jobListDetailsList.add(jobListDetails);
+        }
+
+        return DATA(jobListDetailsList);
     }
 
     @Override

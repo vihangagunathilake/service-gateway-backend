@@ -15,6 +15,8 @@ public interface JobService {
 
     ResponseEntity<?> pointWiseJobs(PointJobs pointJobs, HttpServletRequest request);
 
+    ResponseEntity<?> dateWiseJobs(PointJobs pointJobs, HttpServletRequest request);
+
     ResponseEntity<?> jobDetails(Integer jobId, HttpServletRequest request);
 
     void deleteExpiredDummyJobs();

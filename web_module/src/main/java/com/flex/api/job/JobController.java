@@ -47,6 +47,12 @@ public class JobController {
         return jobService.jobDetails(id, request);
     }
 
+    @PostMapping("/list")
+    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PT)")
+    public ResponseEntity<?> jobsList(@RequestBody PointJobs pointJobs, HttpServletRequest request) {
+        return jobService.dateWiseJobs(pointJobs, request);
+    }
+
     @PostMapping("/schedule")
     @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PT)")
     public ResponseEntity<?> jobSchedule(@RequestBody PointJobs pointJobs, HttpServletRequest request) {

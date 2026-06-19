@@ -17,5 +17,4 @@ public class AddUser {
     private String userType;
     private Integer serviceCenterId;
     private Integer roleId;
-    private String password;
 }

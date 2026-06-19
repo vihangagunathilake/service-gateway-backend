@@ -3,6 +3,7 @@ package com.flex.user_module.impl.services;
 import com.flex.common_module.constants.Colors;
 import com.flex.common_module.http.pagination.Pagination;
 import com.flex.common_module.http.pagination.Sorting;
+import com.flex.common_module.mails.services.EmailService;
 import com.flex.common_module.security.http.response.UserClaims;
 import com.flex.common_module.security.utils.CryptoUtil;
 import com.flex.common_module.security.utils.HashUtil;
@@ -25,6 +26,8 @@ import com.flex.user_module.impl.entities.*;
 import com.flex.user_module.impl.entities.RolePermissionAccess;
 import com.flex.user_module.impl.repositories.*;
 import com.flex.user_module.impl.services.helpers.UserServiceHelper;
+import io.jsonwebtoken.Claims;
+import jakarta.mail.MessagingException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,8 +38,12 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -62,6 +69,7 @@ public class UserServiceImpl implements UserService {
     private final RoleCacheService roleCacheService;
 
     private final ApplicationEventPublisher publisher;
+    private final EmailService emailService;
 
     private final ServiceProviderRepository serviceProviderRepository;
     private final ServiceCenterRepository serviceCenterRepository;
@@ -73,10 +81,12 @@ public class UserServiceImpl implements UserService {
     private final PermissionRepository permissionRepository;
     private final RolePermissionRepository rolePermissionRepository;
     private final RolePermissionAccessRepository rolePermissionAccessRepository;
+    private final UserPasswordTokenRepository passwordTokenRepository;
+    private final UserPasswordTokenRepository userPasswordTokenRepository;
 
 
     @Override
-    public ResponseEntity<?> register(Register register, HttpServletRequest request) {
+    public ResponseEntity<?> register(Register register, HttpServletRequest request) throws MessagingException {
         log.info(request.getRequestURI(), "{} body - {}", register);
 
         if (serviceProviderRepository.existsByNameAndEmailAndDeletedIsFalse(
@@ -146,7 +156,6 @@ public class UserServiceImpl implements UserService {
                 .role(admin)
                 .serviceProvider(serviceProvider)
                 .userType(ADMIN)
-                .password(HashUtil.hash(register.getAdminPassword()))
                 .build();
 
         UserDetails userDetails = UserDetails.builder()
@@ -155,11 +164,30 @@ public class UserServiceImpl implements UserService {
                 .addedTime(new Date())
                 .build();
 
+        String newToken = UUID.randomUUID()
+                .toString()
+                .replace("-", "")
+                .substring(0, 8)
+                .toUpperCase();
+
+        UserPasswordToken userPasswordToken = UserPasswordToken.builder()
+                .token(newToken)
+                .expireTime(null)
+                .user(user)
+                .used(false)
+                .build();
+
+        user.setPassword(HashUtil.hash(newToken));
+
         roleRepository.save(admin);
         rolePermissionRepository.saveAll(rolePermissions);
         rolePermissionAccessRepository.saveAll(rolePermissionAccesses);
         userRepository.save(user);
         userDetailsRepository.save(userDetails);
+
+        userPasswordTokenRepository.save(userPasswordToken);
+
+        emailService.newPassword(user.getEmail(), newToken, user.getFName());
 
         return SUCCESS("Registration Completed. Please login");
     }
@@ -174,6 +202,37 @@ public class UserServiceImpl implements UserService {
 
         if (user == null) {
             return CONFLICT("Invalid username");
+        }
+
+        if (!user.isResetPassword()) {
+            Map<String, Object> claims = new HashMap<>();
+
+            claims.put("user", user.getId());
+            claims.put("type", user.getUserType());
+            claims.put("provider", user.getServiceProvider().getProviderId());
+            claims.put("center", user.getServiceCenter() != null ? user.getServiceCenter().getId() : null);
+
+            String token = jwtUtil.generateToken(claims, user.getEmail());
+
+            LoginResponse response = LoginResponse.builder()
+                    .token(token)
+                    .refreshToken(null)
+                    .password(user.isResetPassword())
+                    .forgot(user.isForgotPassword())
+                    .build();
+
+            UserLogin userLogin = UserLogin.builder()
+                    .loginTime(new Date())
+                    .token(token)
+                    .userId(user.getId())
+                    .build();
+
+            userLoginRepository.save(userLogin);
+
+            user.setPassword(HashUtil.hash(login.getPassword()));
+            userRepository.save(user);
+
+            return DATA(response);
         }
 
         if (!HashUtil.checkEncrypted(login.getPassword(), user.getPassword())) {
@@ -210,9 +269,109 @@ public class UserServiceImpl implements UserService {
         LoginResponse response = LoginResponse.builder()
                 .token(token)
                 .refreshToken(refreshToken)
+                .password(user.isResetPassword())
+                .forgot(user.isForgotPassword())
                 .build();
 
         return DATA(response);
+    }
+
+    @Override
+    public ResponseEntity<?> newPassword(ChangePassword changePassword, HttpServletRequest request) {
+        log.info(request.getRequestURI());
+
+        User user = userRepository.findByEmailAndDeletedIsFalse(changePassword.getEmail());
+
+        if (user == null) {
+            return CONFLICT("This email does not exist");
+        }
+
+        if (changePassword.isForgot()) {
+
+            List<UserPasswordToken> resetPasswordTokens = userPasswordTokenRepository.getNonExpiredUserPasswordTokens(
+                    user.getId(), changePassword.getEmailString(), LocalDateTime.now(ZoneId.of("Asia/Colombo"))
+            );
+
+            if (resetPasswordTokens.isEmpty()) {
+                return CONFLICT("Reset Password Tokens not found");
+            }
+
+            if (HashUtil.checkEncrypted(changePassword.getNewPassword(), user.getPassword())) {
+                return CONFLICT("Old and new passwords can not be the same");
+            }
+
+            resetPasswordTokens.forEach(token -> token.setUsed(true));
+
+            userPasswordTokenRepository.saveAll(resetPasswordTokens);
+
+            user.setPassword(HashUtil.hash(changePassword.getNewPassword()));
+            user.setForgotPassword(false);
+            user.setResetPassword(true);
+            userRepository.save(user);
+
+            return SUCCESS("Password Reset Completed");
+        } else {
+            UserPasswordToken userPasswordToken = userPasswordTokenRepository.findTokenByUserId(
+                    user.getId(),
+                    changePassword.getEmailString()
+            );
+
+            if (userPasswordToken == null) {
+                return CONFLICT("This email does not registered");
+            }
+
+            userPasswordToken.setUsed(true);
+            userPasswordTokenRepository.save(userPasswordToken);
+
+            user.setPassword(HashUtil.hash(changePassword.getNewPassword()));
+            user.setResetPassword(true);
+
+            userRepository.save(user);
+
+            return SUCCESS("Password changed successfully");
+        }
+    }
+
+    @Override
+    public ResponseEntity<?> forgetPassword(ChangePassword changePassword, HttpServletRequest request) throws MessagingException {
+        log.info(request.getRequestURI());
+
+        User user = userRepository.findByEmailAndDeletedIsFalse(changePassword.getEmail());
+
+        if (user == null) {
+            return CONFLICT("This email does not exist");
+        }
+
+        List<UserPasswordToken> resetPasswordTokens = userPasswordTokenRepository.getNonExpiredUserPasswordTokens(
+                user.getId(), changePassword.getNewPassword(), LocalDateTime.now(ZoneId.of("Asia/Colombo"))
+        );
+
+        if (!resetPasswordTokens.isEmpty()) {
+            return SUCCESS("Reset token already sent. Please check your email");
+        }
+
+        String newToken = UUID.randomUUID()
+                .toString()
+                .replace("-", "")
+                .substring(0, 8)
+                .toUpperCase();
+
+        user.setResetPassword(false);
+        user.setForgotPassword(true);
+
+        userRepository.save(user);
+
+        UserPasswordToken userPasswordToken = UserPasswordToken.builder()
+                .token(newToken)
+                .expireTime(LocalDateTime.now().plusMinutes(5))
+                .user(user)
+                .build();
+
+        userPasswordTokenRepository.save(userPasswordToken);
+
+        emailService.sendPasswordResetEmail(user.getEmail(), newToken, user.getFName());
+
+        return SUCCESS("Password Reset Request sent. Please check your email");
     }
 
     @Override
@@ -262,7 +421,7 @@ public class UserServiceImpl implements UserService {
                         .providerId(user.getServiceProvider().getProviderId())
                         .serviceCenter(user.getServiceProvider().getName())
                         .userName(user.getFName())
-                        .image(null)
+                        .image(user.getProfileImageUrl())
                         .build());
     }
 
@@ -475,7 +634,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public ResponseEntity<?> addUser(AddUser addUser, HttpServletRequest request) {
+    public ResponseEntity<?> addUser(AddUser addUser, HttpServletRequest request) throws MessagingException {
         log.info(request.getRequestURI(), "{} body - {}", addUser);
 
         UserClaims userClaims = JwtUtil.getClaimsFromToken(request);
@@ -529,7 +688,6 @@ public class UserServiceImpl implements UserService {
                 .fName(addUser.getFirstName())
                 .lName(addUser.getLastName())
                 .email(addUser.getEmail())
-                .password(HashUtil.hash(addUser.getPassword()))
                 .role(role)
                 .serviceCenter(serviceCenter)
                 .serviceProvider(serviceProvider)
@@ -561,11 +719,85 @@ public class UserServiceImpl implements UserService {
                 .providerApproved(true)
                 .build();
 
+        String newToken = UUID.randomUUID()
+                .toString()
+                .replace("-", "")
+                .substring(0, 8)
+                .toUpperCase();
+
+        UserPasswordToken userPasswordToken = UserPasswordToken.builder()
+                .token(newToken)
+                .expireTime(null)
+                .user(user)
+                .used(false)
+                .build();
+
         userRepository.save(user);
         userDetailsRepository.save(userDetails);
         userStatusRepository.save(userStatus);
+        userPasswordTokenRepository.save(userPasswordToken);
+
+        emailService.newPassword(user.getEmail(), newToken, user.getFName());
 
         return SUCCESS("Registration Completed");
+    }
+
+    @Override
+    public ResponseEntity<?> uploadProfileImage(Integer userId, MultipartFile profile, HttpServletRequest request) {
+        log.info(request.getRequestURI());
+
+        UserClaims userClaims = JwtUtil.getClaimsFromToken(request);
+
+        if (userClaims == null || userClaims.getUserId() == null) {
+            return CONFLICT("User not found");
+        }
+
+        User user = userRepository.findByIdAndDeletedIsFalse(userClaims.getUserId());
+
+        if (user == null) {
+            return CONFLICT("User not found");
+        }
+
+        try {
+            user.setProfileImageUrl(userServiceHelper.saveUserProfileImage(profile, user.getId()));
+
+            userRepository.save(user);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            return CONFLICT("Profile image upload failed");
+        }
+
+        return SUCCESS("Save changes");
+    }
+
+    @Override
+    public ResponseEntity<?> uploadCoverImage(Integer userId, MultipartFile cover, HttpServletRequest request) {
+        log.info(request.getRequestURI());
+
+        UserClaims userClaims = JwtUtil.getClaimsFromToken(request);
+
+        if (userClaims == null || userClaims.getUserId() == null) {
+            return CONFLICT("User not found");
+        }
+
+        User user = userRepository.findByIdAndDeletedIsFalse(userClaims.getUserId());
+
+        if (user == null) {
+            return CONFLICT("User not found");
+        }
+
+        try {
+            user.setCoverImageUrl(userServiceHelper.saveUserCoverImage(cover, user.getId()));
+
+            userRepository.save(user);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            return CONFLICT("Cover image upload failed");
+        }
+
+        return SUCCESS("Save changes");
     }
 
     @Override
@@ -663,6 +895,8 @@ public class UserServiceImpl implements UserService {
                         .nic(userDetails.getNic() != null ? CryptoUtil.decrypt(userDetails.getNic()) : null)
                         .contact(userDetails.getContact() != null ? CryptoUtil.decrypt(userDetails.getContact()) : null)
                         .joinedDate(new SimpleDateFormat("MMM dd, yyyy").format(userDetails.getAddedTime()))
+                        .profileImageUrl(user.getProfileImageUrl())
+                        .coverImageUrl(user.getCoverImageUrl())
                         .build());
     }
 
@@ -729,12 +963,6 @@ public class UserServiceImpl implements UserService {
             if (serviceCenterRepository.existsByIdAndDeletedIsFalse(updateUser.getServiceCenterId())) {
                 existingUser.setServiceCenter(new ServiceCenter(updateUser.getServiceCenterId()));
             }
-        }
-
-        if (updateUser.getPassword() != null
-                && !updateUser.getPassword().isEmpty()
-                && !HashUtil.checkEncrypted(updateUser.getPassword(), existingUser.getPassword())) {
-            existingUser.setPassword(HashUtil.hash(updateUser.getPassword()));
         }
 
         if (updateUser.getNic() != null
@@ -809,12 +1037,6 @@ public class UserServiceImpl implements UserService {
             }
         }
 
-        if (updateUser.getPassword() != null
-                && !updateUser.getPassword().isEmpty()
-                && !HashUtil.checkEncrypted(updateUser.getPassword(), existingUser.getPassword())) {
-            existingUser.setPassword(HashUtil.hash(updateUser.getPassword()));
-        }
-
         if (updateUser.getNic() != null
                 && !updateUser.getNic().isEmpty()) {
             existingUserDetails.setNic(CryptoUtil.encrypt(updateUser.getNic()));
@@ -845,6 +1067,12 @@ public class UserServiceImpl implements UserService {
         user.setDeleted(true);
 
         userRepository.save(user);
+
+        UserDetails userDetails = userDetailsRepository.findByUser_id(user.getId());
+
+        if (userDetails != null) {
+            userDetailsRepository.delete(userDetails);
+        }
 
         return SUCCESS("Deleted User");
     }

@@ -31,7 +31,6 @@ public class User {
     private String lName;
     private String email;
     private String password;
-    private String image;
     //0-user, 1-admin, 2-customer
     private int userType;
     @ManyToOne
@@ -43,6 +42,10 @@ public class User {
     @ManyToOne
     @JoinColumn(name = "service_center_id")
     private ServiceCenter serviceCenter;
+    private String profileImageUrl;
+    private String coverImageUrl;
+    private boolean resetPassword;
+    private boolean forgotPassword;
     private boolean deleted;
 
     public User(Integer id) {

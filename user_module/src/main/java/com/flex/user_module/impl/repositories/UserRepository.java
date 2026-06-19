@@ -42,7 +42,8 @@ public interface UserRepository extends JpaRepository<User, Integer> {
                     " case when u.userType = 0 then 'user' when u.userType = 1 then 'admin' else 'customer' end AS userType, " +
                     " r.role AS role, " +
                     " sc.name AS serviceCenter, " +
-                    " case when us.providerApproved = true then 'approved' else 'pending' end AS providerApproved " +
+                    " case when us.providerApproved = true then 'approved' else 'pending' end AS providerApproved, " +
+                    " u.profileImageUrl AS profileImage " +
                     "FROM User u " +
                     " LEFT JOIN UserDetails ud ON ud.user = u " +
                     " LEFT JOIN UserStatus us ON us.user = u " +

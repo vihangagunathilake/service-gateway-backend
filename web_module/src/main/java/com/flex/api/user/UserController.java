@@ -4,11 +4,13 @@ package com.flex.api.user;
 import com.flex.common_module.http.pagination.Pagination;
 import com.flex.user_module.api.http.requests.*;
 import com.flex.user_module.api.services.UserService;
+import jakarta.mail.MessagingException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * $DESC
@@ -24,7 +26,7 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody Register register, HttpServletRequest request) {
+    public ResponseEntity<?> register(@RequestBody Register register, HttpServletRequest request) throws MessagingException {
         return userService.register(register, request);
     }
 
@@ -38,6 +40,17 @@ public class UserController {
     @GetMapping("/logout")
     public ResponseEntity<?> logout(HttpServletRequest request) {
         return userService.logout(request);
+    }
+
+    @PostMapping("/new-password")
+    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PT)")
+    public ResponseEntity<?> newPassword(@RequestBody ChangePassword changePassword, HttpServletRequest request) {
+        return userService.newPassword(changePassword, request);
+    }
+
+    @PostMapping("/forget-password")
+    public ResponseEntity<?> forgetPassword(@RequestBody ChangePassword changePassword, HttpServletRequest request) throws MessagingException {
+        return userService.forgetPassword(changePassword, request);
     }
 
     @GetMapping("/header-data")
@@ -89,8 +102,23 @@ public class UserController {
 
     @PostMapping("/add")
     @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).UM)")
-    public ResponseEntity<?> addUser(@RequestBody AddUser addUser, HttpServletRequest request) {
+    public ResponseEntity<?> addUser(@RequestBody AddUser addUser, HttpServletRequest request) throws MessagingException {
         return userService.addUser(addUser, request);
+    }
+
+    @PostMapping("/change-profile-image")
+    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PT)")
+    public ResponseEntity<?> uploadProfileImages(@RequestParam Integer userId,
+                                                 @RequestParam(required = false) MultipartFile profile,
+                                                 HttpServletRequest request) {
+        return userService.uploadProfileImage(userId, profile, request);
+    }
+
+    @PostMapping("/change-cover-image")
+    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PT)")
+    public ResponseEntity<?> uploadCoverImage(@RequestParam Integer userId,
+                                                 @RequestParam(required = false) MultipartFile profile, HttpServletRequest request) {
+        return userService.uploadCoverImage(userId, profile, request);
     }
 
     @GetMapping("/{id}/get")

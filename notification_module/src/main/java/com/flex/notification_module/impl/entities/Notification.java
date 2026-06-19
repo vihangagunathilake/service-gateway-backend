@@ -24,8 +24,8 @@ public class Notification {
     private String description;
     private String link;
     private String notificationType;
-    @JsonFormat(pattern = "yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Colombo")
     private LocalDate createdDate;
-    @JsonFormat(pattern = "HH:mm:ss")
+    @JsonFormat(pattern = "HH:mm:ss", timezone = "Asia/Colombo")
     private LocalTime createdTime;
 }

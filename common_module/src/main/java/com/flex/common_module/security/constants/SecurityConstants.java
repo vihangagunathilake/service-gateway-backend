@@ -12,6 +12,7 @@ public class SecurityConstants {
     public static final String[] EXCLUDED_PATHS = {
             "/user/login",
             "/user/register",
+            "/user/forget-password",
             "/user/logout",
             "/user/employee-register",
             "/ws/**",

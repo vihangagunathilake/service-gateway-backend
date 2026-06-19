@@ -30,9 +30,9 @@ public class ServicePoint {
     @ManyToOne
     @JoinColumn(name = "service_center_id")
     private ServiceCenter serviceCenter;
-    @JsonFormat(pattern = "HH:mm")
+    @JsonFormat(pattern = "HH:mm", timezone = "Asia/Colombo")
     private LocalTime openTime;
-    @JsonFormat(pattern = "HH:mm")
+    @JsonFormat(pattern = "HH:mm", timezone = "Asia/Colombo")
     private LocalTime closeTime;
     private boolean temporaryClosed;
     //this means 'delete this point at 11:59:00 pm when the last job is ended'

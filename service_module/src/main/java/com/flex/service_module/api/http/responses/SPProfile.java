@@ -26,4 +26,6 @@ public class SPProfile {
     private String status;
     private String joinDate;
     private String description;
+    private String profile;
+    private String cover;
 }

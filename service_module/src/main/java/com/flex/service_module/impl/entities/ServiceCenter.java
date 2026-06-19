@@ -32,9 +32,9 @@ public class ServiceCenter {
     private ServiceProvider serviceProvider;
     private String contact;
     private String location;
-    @JsonFormat(pattern = "HH:mm")
+    @JsonFormat(pattern = "HH:mm", timezone = "Asia/Colombo")
     private LocalTime openTime;
-    @JsonFormat(pattern = "HH:mm")
+    @JsonFormat(pattern = "HH:mm", timezone = "Asia/Colombo")
     private LocalTime closeTime;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Asia/Colombo")
     @Column(columnDefinition = "TIMESTAMP default CURRENT_TIMESTAMP")

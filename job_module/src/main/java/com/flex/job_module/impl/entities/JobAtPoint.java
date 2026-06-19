@@ -40,18 +40,17 @@ public class JobAtPoint {
     @JoinColumn(name = "job_id")
     private Job job;
 
-    @JsonFormat(pattern = "HH:mm:ss")
+    @JsonFormat(pattern = "HH:mm:ss", timezone = "Asia/Colombo")
     @Column(nullable = false)
     private LocalTime startTime;
-    @JsonFormat(pattern = "HH:mm:ss")
+    @JsonFormat(pattern = "HH:mm:ss", timezone = "Asia/Colombo")
     @Column(nullable = false)
     private LocalTime endTime;
-    @JsonFormat(pattern = "HH:mm:ss")
+    @JsonFormat(pattern = "HH:mm:ss", timezone = "Asia/Colombo")
     private LocalTime actualEndTime;
-    @JsonFormat(pattern = "yyyy-MM-dd")
-    @DateTimeFormat(pattern = "yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Colombo")
     private LocalDate createdDate;
-    @JsonFormat(pattern = "HH:mm:ss")
+    @JsonFormat(pattern = "HH:mm:ss", timezone = "Asia/Colombo")
     @Column(nullable = false)
     private LocalTime createdTime;
 

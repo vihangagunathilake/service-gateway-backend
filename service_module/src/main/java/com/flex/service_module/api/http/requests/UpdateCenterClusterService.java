@@ -21,7 +21,7 @@ public class UpdateCenterClusterService {
     private Integer downPay;
     private Integer orderNumber;
 
-    @JsonFormat(pattern = "HH:mm")
+    @JsonFormat(pattern = "HH:mm", timezone = "Asia/Colombo")
     private LocalTime serviceTime;
 
     private Boolean disabled;

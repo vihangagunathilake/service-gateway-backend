@@ -30,7 +30,7 @@ public class Service {
     @ManyToOne
     @JoinColumn(name = "service_provider_id")
     private ServiceProvider provider;
-    @JsonFormat(pattern = "HH:mm:ss")
+    @JsonFormat(pattern = "HH:mm:ss", timezone = "Asia/Colombo")
     private LocalTime serviceTime;
     @Column(length = 512)
     private String description;

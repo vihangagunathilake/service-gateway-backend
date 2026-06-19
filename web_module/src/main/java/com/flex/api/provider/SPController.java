@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * $DESC
@@ -31,5 +32,17 @@ public class SPController {
     @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).SP)")
     public ResponseEntity<?> editSP(@RequestBody ServiceProvider serviceProvider , HttpServletRequest request) {
         return SPService.editServiceProvider(serviceProvider, request);
+    }
+
+    @PostMapping("/profile-image")
+    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).SP)")
+    public ResponseEntity<?> uploadSPProfileImage(@RequestParam(required = false) MultipartFile multipartFile , HttpServletRequest request) {
+        return SPService.uploadSPProfileImage(multipartFile, request);
+    }
+
+    @PostMapping("/cover-image")
+    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).SP)")
+    public ResponseEntity<?> uploadSPCoverImage(@RequestParam(required = false) MultipartFile multipartFile , HttpServletRequest request) {
+        return SPService.uploadSPCoverPhoto(multipartFile, request);
     }
 }

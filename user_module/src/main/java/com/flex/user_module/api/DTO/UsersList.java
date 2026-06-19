@@ -10,4 +10,5 @@ public interface UsersList {
     String getRole();
     String getServiceCenter();
     String getProviderApproved();
+    String getProfileImage();
 }

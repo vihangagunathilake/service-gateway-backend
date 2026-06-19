@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>System Access Token</title>
+</head>
+
+<body style="margin:0; padding:0; font-family:Arial, sans-serif; background-color:#f4f6f8;">
+
+<div style="max-width:600px; margin:30px auto; background:white; border-radius:10px; overflow:hidden; border:1px solid #e0e0e0;">
+
+    <!-- HEADER -->
+    <div style="text-align:center; padding:20px; background:#1976d2;">
+        <h2 style="color:white; margin:0;">Welcome to System</h2>
+    </div>
+
+    <!-- BODY -->
+    <div style="padding:30px; color:#333;">
+
+        <!-- GREETING -->
+        <p>Hi <b th:text="${name}">User</b>,</p>
+
+        <p>You have been invited to access the system. Use the token below to complete your registration:</p>
+
+        <!-- TOKEN BOX -->
+        <div style="text-align:center; margin:30px 0;">
+            <div style="display:inline-block; padding:15px 25px; font-size:20px;
+                        letter-spacing:2px; background:#f1f1f1;
+                        border-radius:8px; font-weight:bold;">
+                <span th:text="${token}"></span>
+            </div>
+        </div>
+
+        <p>Use <b th:text="${link}">Link</b> to access to the system.</p>
+
+    </div>
+
+    <!-- FOOTER -->
+    <div style="text-align:center; padding:15px; font-size:12px; color:#999;">
+        © 2026 Your Company. All rights reserved.
+    </div>
+
+</div>
+
+</body>
+</html>

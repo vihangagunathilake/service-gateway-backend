@@ -19,7 +19,8 @@ public class UserProfileData {
     private String nic;
     private String contact;
     private String joinedDate;
-    private String imageUrl;
+    private String profileImageUrl;
+    private String coverImageUrl;
 
     @Data
     @Builder

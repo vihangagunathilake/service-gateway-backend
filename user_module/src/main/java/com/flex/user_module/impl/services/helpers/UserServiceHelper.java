@@ -7,9 +7,17 @@ import com.flex.user_module.impl.entities.UserLogin;
 import com.flex.user_module.impl.repositories.UserLoginRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FilenameUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -23,10 +31,23 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@SuppressWarnings("Duplicates")
 public class UserServiceHelper {
 
     private final UserLoginRepository userLoginRepository;
     private final ExpiredTokenRepository expiredTokenRepository;
+
+    @Value("${app.image.url}")
+    private String imageUrl;
+
+    @Value("${app.storage.path}")
+    private String mainImageStorage;
+
+    @Value("${user.profile}")
+    private String userProfile;
+
+    @Value("${user.cover}")
+    private String userCover;
 
     //close all non-logout login.
     public void logoutFromPreviousLogins(Integer userId) {
@@ -76,5 +97,55 @@ public class UserServiceHelper {
         }
 
         return "success";
+    }
+
+    public String saveUserProfileImage(MultipartFile file, Integer userId) throws IOException {
+        if (file != null && !file.isEmpty()) {
+            Path imageFolder = Paths.get(mainImageStorage + userProfile);
+
+            if (!Files.exists(imageFolder)) {
+                Files.createDirectories(imageFolder);
+            }
+
+            String extension = FilenameUtils.getExtension(file.getOriginalFilename());
+
+            Files.deleteIfExists(Paths.get(imageFolder + userId.toString() +
+                    "." + extension));
+
+            Files.copy(file.getInputStream(), imageFolder.resolve(userId
+                    + "." + extension), StandardCopyOption.REPLACE_EXISTING);
+
+            String profileImageUrl = imageUrl + userProfile;
+
+            return setImageUrl(profileImageUrl, userId, extension);
+        }
+        return null;
+    }
+
+    public String saveUserCoverImage(MultipartFile file, Integer userId) throws IOException {
+        if (file != null && !file.isEmpty()) {
+            Path imageFolder = Paths.get(mainImageStorage + userCover);
+
+            if (!Files.exists(imageFolder)) {
+                Files.createDirectories(imageFolder);
+            }
+
+            String extension = FilenameUtils.getExtension(file.getOriginalFilename());
+
+            Files.deleteIfExists(Paths.get(imageFolder + userId.toString() +
+                    "." + extension));
+
+            Files.copy(file.getInputStream(), imageFolder.resolve(userId
+                    + "." + extension), StandardCopyOption.REPLACE_EXISTING);
+
+            String profileImageUrl = imageUrl + userCover;
+
+            return setImageUrl(profileImageUrl, userId, extension);
+        }
+        return null;
+    }
+
+    private String setImageUrl(String imageUrl, Integer id, String imageExtension) {
+        return imageUrl + id + "." + imageExtension;
     }
 }

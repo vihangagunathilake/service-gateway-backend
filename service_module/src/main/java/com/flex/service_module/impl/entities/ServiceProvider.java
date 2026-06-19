@@ -32,8 +32,11 @@ public class ServiceProvider {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Asia/Colombo")
     @Column(columnDefinition = "TIMESTAMP default CURRENT_TIMESTAMP")
     private Date addedTime;
+    @Column(length = 1000)
     private String description;
     private Integer serviceFee;
+    private String profileImage;
+    private String coverPhoto;
     private boolean active;
     private boolean hasMultipleCenters;
     private boolean restricted;

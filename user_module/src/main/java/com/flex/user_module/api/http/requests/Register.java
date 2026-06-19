@@ -6,7 +6,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * $DESC
- *
+0 *
  * @author Yasintha Gunathilake
  * @since 1/13/2026
  */
@@ -22,5 +22,4 @@ public class Register {
     private String adminFName;
     private String adminLName;
     private String adminEmail;
-    private String adminPassword;
 }

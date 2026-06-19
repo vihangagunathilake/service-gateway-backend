@@ -36,7 +36,7 @@ public class CenterClusterServices {
     private Integer downPay;
     private Integer orderNumber;
     private Integer prevOrderNumber;
-    @JsonFormat(pattern = "HH:mm")
+    @JsonFormat(pattern = "HH:mm", timezone = "Asia/Colombo")
     private LocalTime serviceTime;
     private boolean disabled;
 }

@@ -2,8 +2,10 @@ package com.flex.user_module.api.services;
 
 import com.flex.common_module.http.pagination.Pagination;
 import com.flex.user_module.api.http.requests.*;
+import jakarta.mail.MessagingException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * $DESC
@@ -13,9 +15,13 @@ import org.springframework.http.ResponseEntity;
  */
 public interface UserService {
 
-    ResponseEntity<?> register(Register register, HttpServletRequest request);
+    ResponseEntity<?> register(Register register, HttpServletRequest request) throws MessagingException;
 
     ResponseEntity<?> login(Login login, HttpServletRequest request);
+
+    ResponseEntity<?> newPassword(ChangePassword changePassword, HttpServletRequest request);
+
+    ResponseEntity<?> forgetPassword(ChangePassword changePassword, HttpServletRequest request) throws MessagingException;
 
     ResponseEntity<?> logout(HttpServletRequest request);
 
@@ -35,7 +41,11 @@ public interface UserService {
 
     ResponseEntity<?> decryptString(DecryptValue value, HttpServletRequest request);
 
-    ResponseEntity<?> addUser(AddUser addUser, HttpServletRequest request);
+    ResponseEntity<?> addUser(AddUser addUser, HttpServletRequest request) throws MessagingException;
+
+    ResponseEntity<?> uploadProfileImage(Integer userId, MultipartFile profile, HttpServletRequest request);
+
+    ResponseEntity<?> uploadCoverImage(Integer userId, MultipartFile cover, HttpServletRequest request);
 
     ResponseEntity<?> getUser(Integer userId, HttpServletRequest request);
 

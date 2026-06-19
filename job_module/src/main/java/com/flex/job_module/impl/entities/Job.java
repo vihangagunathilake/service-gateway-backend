@@ -39,16 +39,16 @@ public class Job {
     private ServiceCenter serviceCenter;
 
     // times
-    @JsonFormat(pattern = "HH:mm:ss")
+    @JsonFormat(pattern = "HH:mm:ss", timezone = "Asia/Colombo")
     private LocalTime estimatedTotalTime;
-    @JsonFormat(pattern = "yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Colombo")
     @Column(nullable = false)
     private LocalDate appointmentDate;
-    @JsonFormat(pattern = "HH:mm:ss")
+    @JsonFormat(pattern = "HH:mm:ss", timezone = "Asia/Colombo")
     private LocalTime appointmentTime;
-    @JsonFormat(pattern = "yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Colombo")
     private LocalDate createdDate;
-    @JsonFormat(pattern = "HH:mm:ss")
+    @JsonFormat(pattern = "HH:mm:ss", timezone = "Asia/Colombo")
     private LocalTime createdTime;
     @Column(length = 1000)
     private String description;

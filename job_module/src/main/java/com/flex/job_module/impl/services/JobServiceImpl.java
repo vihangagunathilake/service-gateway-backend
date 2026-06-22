@@ -1284,10 +1284,10 @@ public class JobServiceImpl implements JobService {
             List<JobAtPoint> jobAtPoints = jobAtPointRepository.findAllByJobId(jobDetail.getJobId());
 
             // find service point
-            List<String> servicePoints = jobAtPoints.stream().map(j -> j.getServicePoint().getName()).toList();
+            List<String> servicePoints = jobAtPoints.stream().map(j -> j.getServicePoint().getName()).distinct().toList();
             jobListDetails.setPoints(servicePoints);
 
-            List<String> services = jobAtPoints.stream().map(j -> j.getService().getName()).toList();
+            List<String> services = jobAtPoints.stream().map(j -> j.getService().getName()).distinct().toList();
             jobListDetails.setServices(services);
 
             // find service slot

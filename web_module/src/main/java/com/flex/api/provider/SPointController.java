@@ -44,4 +44,10 @@ public class SPointController {
     public ResponseEntity<?> remove(@PathVariable Integer pointId, HttpServletRequest request) {
         return servicePointService.removePoint(pointId, request);
     }
+
+    @GetMapping("/service-center/{serviceCenterId}/dropdown")
+    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PT)")
+    public ResponseEntity<?> dropdown(@PathVariable Integer serviceCenterId, HttpServletRequest request) {
+        return servicePointService.dropdown(serviceCenterId, request);
+    }
 }

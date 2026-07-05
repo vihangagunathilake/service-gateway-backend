@@ -151,4 +151,19 @@ public class SPointServiceImpl implements ServicePointService {
 
         return SUCCESS("Service point removed successfully");
     }
+
+    @Override
+    public ResponseEntity<?> dropdown(Integer serviceCenterId, HttpServletRequest request) {
+        log.info(request.getRequestURI());
+
+        if (serviceCenterId == null) {
+            return BAD_REQUEST("Invalid service center");
+        }
+
+        if (!serviceCenterRepository.existsByIdAndDeletedIsFalse(serviceCenterId)) {
+            return CONFLICT("Service center not found");
+        }
+
+        return DATA(servicePointRepository.servicePointLightDetailsByCenter(serviceCenterId));
+    }
 }

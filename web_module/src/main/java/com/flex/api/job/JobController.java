@@ -41,16 +41,16 @@ public class JobController {
         return jobService.removeDummyJob(jobId, customerId, request);
     }
 
-    @GetMapping("/{id}/details")
-    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PT)")
-    public ResponseEntity<?> jobDetails(@PathVariable Integer id, HttpServletRequest request) {
-        return jobService.jobDetails(id, request);
-    }
-
     @PostMapping("/list")
     @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PT)")
     public ResponseEntity<?> jobsList(@RequestBody PointJobs pointJobs, HttpServletRequest request) {
         return jobService.dateWiseJobs(pointJobs, request);
+    }
+
+    @GetMapping("/{jobId}/allow-to-serve")
+    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).JM)")
+    public ResponseEntity<?> allowToServe(@PathVariable Integer jobId, HttpServletRequest request) {
+        return jobService.allowToServe(jobId, request);
     }
 
     @PostMapping("/schedule")

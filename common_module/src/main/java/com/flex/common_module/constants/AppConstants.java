@@ -19,4 +19,6 @@ public class AppConstants {
     public static final int P_IN_PROGRESS = 1;
     public static final int P_COMPLETED = 10;
     public static final int P_ON_HOLD = 3;
+
+    public static final String ASIA_COLOMBO_TIME_ZONE = "Asia/Colombo";
 }

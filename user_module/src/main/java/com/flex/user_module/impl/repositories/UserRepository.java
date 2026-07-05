@@ -37,7 +37,10 @@ public interface UserRepository extends JpaRepository<User, Integer> {
                     " u.email AS email, " +
                     " ud.contact AS mobile, " +
                     " ud.nic AS nic, " +
-                    " case when u.userType = 0 then 'user' when u.userType = 1 then 'admin' else 'customer' end AS userType, " +
+                    " case when u.userType = 0 then 'admin' " +
+                    "   when u.userType = 1 then 'user' " +
+                    "   when u.userType = 2 then 'employee' " +
+                    "   else 'unknown' end AS userType, " +
                     " r.role AS role, " +
                     " sc.name AS serviceCenter, " +
                     " case when us.providerApproved = true then 'approved' else 'pending' end AS providerApproved, " +

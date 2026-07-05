@@ -1,4 +1,4 @@
-package com.flex.job_module.api.http.responses;
+package com.flex.user_module.api.http.responses;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -37,6 +37,8 @@ public class JobDetails {
     private String description;
 
     private List<SubJobDetails> timeline;
+
+    private String customerArrivedTime;
 
     private boolean verifiedJob;
 }

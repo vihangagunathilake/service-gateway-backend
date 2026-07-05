@@ -46,7 +46,7 @@ public class JobCreatedNotifyListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void handleRoleCreated(JobCreatedNotifyEvent jobCreatedNotifyEvent) {
+    public void jobCreatedNotification(JobCreatedNotifyEvent jobCreatedNotifyEvent) {
         log.info("role base notifications creation started");
 
         String description = "New job created in " + jobCreatedNotifyEvent.serviceCenter();

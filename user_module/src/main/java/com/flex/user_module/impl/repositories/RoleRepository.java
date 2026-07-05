@@ -23,6 +23,8 @@ public interface RoleRepository extends JpaRepository<Role, Integer> {
 
     Role findByIdAndDeletedIsFalse(Integer id);
 
+    Role findByServiceProvider_IdAndEmployeeIsTrue(Integer serviceProviderId);
+
     @Query(
             "SELECT " +
                     " r.id AS roleId, " +
@@ -40,7 +42,7 @@ public interface RoleRepository extends JpaRepository<Role, Integer> {
                     "JOIN RolePermission rp ON rp.role.id = r.id " +
                     "JOIN RolePermissionAccess rpa ON rpa.rolePermission.id = rp.id " +
                     "JOIN Permission p ON rp.permission.id = p.id " +
-                    "WHERE r.serviceProvider.id = :serviceProviderId " +
+                    "WHERE r.serviceProvider.id = :serviceProviderId AND r.employee = false " +
                     "AND r.deleted = false " +
                     "ORDER BY r.id"
     )

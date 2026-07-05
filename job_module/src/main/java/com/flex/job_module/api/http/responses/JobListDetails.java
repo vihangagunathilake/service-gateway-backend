@@ -19,4 +19,6 @@ public class JobListDetails {
     private List<String> points;
     private String timeSlot;
     private Integer status;
+    private int completedPercentage;
+    private boolean allowToServe;
 }

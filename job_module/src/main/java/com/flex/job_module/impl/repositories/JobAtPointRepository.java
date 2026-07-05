@@ -1,5 +1,6 @@
 package com.flex.job_module.impl.repositories;
 
+import com.flex.job_module.api.http.DTO.AgentJobs;
 import com.flex.job_module.api.http.DTO.JobTimelineProjection;
 import com.flex.job_module.api.http.DTO.MinimumServiceTimePoint;
 import com.flex.job_module.impl.entities.JobAtPoint;
@@ -26,23 +27,21 @@ public interface JobAtPointRepository extends JpaRepository<JobAtPoint, Integer>
     List<Integer> getPendingJobAtPointIdsByPoint(@Param("servicePointId") Integer servicePointId,
                                                  @Param("appointmentDate") LocalDate appointmentDate);
 
+    @Query("SELECT j.id FROM JobAtPoint j WHERE j.servicePoint.id=:servicePointId " +
+            "AND j.job.appointmentDate=:appointmentDate AND j.allowToServe = true AND j.status < 1 GROUP BY j.job.id")
+    List<Integer> getOnlyPendingJobAtPointIdsByPoint(@Param("servicePointId") Integer servicePointId,
+                                                 @Param("appointmentDate") LocalDate appointmentDate);
+
     @Query("SELECT j FROM JobAtPoint j WHERE j.servicePoint.id=:servicePointId " +
             "AND j.job.appointmentDate=:appointmentDate AND j.status < 2 ORDER BY j.startTime")
     List<JobAtPoint> getPendingJobsAtPointByPoint(@Param("servicePointId") Integer servicePointId,
                                                  @Param("appointmentDate") LocalDate appointmentDate);
 
-//    @Query("""
-//       SELECT j
-//       FROM JobAtPoint j
-//       LEFT JOIN j.job js
-//       WHERE js.id = :id
-//         AND js.appointmentDate = :date
-//       ORDER BY j.startTime ASC
-//       """)
-//    List<JobAtPoint> findByJobIdAndAppointmentDate(
-//            @Param("id") Integer job,
-//            @Param("date") LocalDate appointmentDate
-//    );
+    @Query("SELECT j FROM JobAtPoint j WHERE j.servicePoint.id=:servicePointId AND j.job.id=:jobId " +
+            "AND j.job.appointmentDate=:appointmentDate AND j.allowToServe = true AND j.status < 2 ORDER BY j.startTime")
+    List<JobAtPoint> getPendingJobsAtPointByPointAndJob(@Param("servicePointId") Integer servicePointId,
+                                                        @Param("jobId") Integer jobId,
+                                                  @Param("appointmentDate") LocalDate appointmentDate);
 
     @Query("SELECT j FROM JobAtPoint j " +
             "WHERE j.servicePoint.id=:point " +
@@ -93,7 +92,9 @@ public interface JobAtPointRepository extends JpaRepository<JobAtPoint, Integer>
             s.name AS serviceName,
             CASE WHEN jp.status = 0 THEN 'pending'
                 WHEN jp.status = 1 THEN 'serving'
-                ELSE 'completed'
+                WHEN jp.status = 2 THEN 'completed'
+                WHEN jp.status = 5 THEN 'timeout'
+                ELSE 'unknown'
             END AS status,
             jp.start_time AS startTime,
             jp.end_time AS endTime,
@@ -125,5 +126,28 @@ public interface JobAtPointRepository extends JpaRepository<JobAtPoint, Integer>
              OR (j.createdDate = :date AND j.createdTime < :time))
     """)
     List<JobAtPoint> findExpiredDummy(LocalDate date, LocalTime time);
+
+    @Query("SELECT j.job.id FROM JobAtPoint j WHERE j.servicePoint.id=:servicePointId " +
+            "AND j.job.appointmentDate=:appointmentDate AND j.allowToServe = true AND j.status < 2 GROUP BY j.job.id")
+    List<Integer> getJobsIdsInPoint(@Param("servicePointId") Integer pointId,
+                                    @Param("appointmentDate") LocalDate appointmentDate);
+
+    @Modifying
+    @Transactional
+    @Query(value = """
+        UPDATE jobs_at_point jap
+        JOIN jobs j ON j.id = jap.job_id
+        JOIN (
+            SELECT job_id
+            FROM jobs_at_point
+            GROUP BY job_id
+            HAVING MIN(start_time) <= DATE_SUB(CURTIME(), INTERVAL 20 MINUTE)
+        ) t ON t.job_id = jap.job_id
+        SET jap.status = 5
+        WHERE jap.status = 0
+          AND j.status = 0
+          AND j.appointment_date = CURDATE()
+        """, nativeQuery = true)
+    int timeoutJobAtPoints();
 
 }

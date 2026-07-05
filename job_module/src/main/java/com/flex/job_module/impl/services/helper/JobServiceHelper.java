@@ -251,12 +251,4 @@ public class JobServiceHelper {
         return null;
     }
 
-    public String jobType(int jobType) {
-        if (jobType == 1) {
-            return "WEB";
-        }
-
-        return "UNDEFINED";
-    }
-
 }

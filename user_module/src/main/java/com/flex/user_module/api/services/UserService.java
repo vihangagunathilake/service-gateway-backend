@@ -69,5 +69,7 @@ public interface UserService {
 
     ResponseEntity<?> removeUserFromCenter(Integer userId, HttpServletRequest request);
 
+    ResponseEntity<?> jobDetails(Integer jobId, HttpServletRequest request);
+
     //todo create a service for customer registration - google OAuth
 }

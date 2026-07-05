@@ -17,4 +17,7 @@ public class PermissionConstant {
     public static final String HM = "Holiday Management";
     public static final String NP = "Notification Permission";
     public static final String NM = "Notification Management";
+    public static final String JM = "Jobs Management";
+    public static final String EP = "Employee Profile";
+    public static final String EJ = "Employee Jobs";
 }

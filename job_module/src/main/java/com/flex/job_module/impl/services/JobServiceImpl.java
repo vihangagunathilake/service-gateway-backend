@@ -34,10 +34,12 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static com.flex.common_module.constants.AppConstants.ASIA_COLOMBO_TIME_ZONE;
 import static com.flex.common_module.http.ReturnResponse.*;
 
 /**
@@ -338,6 +340,11 @@ public class JobServiceImpl implements JobService {
                                     lastJobTime, LocalTime.ofSecondOfDay(totalServiceTime), suitablePoint.getCloseTime()
                             );
 
+                            if (possibleEndTime == null) {
+                                jobServiceHelper.clearDummyData(customer.getId(), job.getId());
+                                return CONFLICT("Sorry, No available service slots for " + prepareJob.getAppointmentDate());
+                            }
+
                             log.info("👉 possible end time: {}", possibleEndTime);
 
                             boolean isAvailable = false;
@@ -351,11 +358,16 @@ public class JobServiceImpl implements JobService {
                                     continue;
                                 }
 
+                                // last job time is equal or grater than 1st job end time
+                                // possible end time is equal or less than second job start time
                                 boolean fitsInGap =
                                         !lastJobTime.isBefore(first.getEndTime()) &&   // start >= first end
                                                 !possibleEndTime.isAfter(second.getStartTime()); // end <= second start
 
-                                if (!fitsInGap && !possibleEndTime.isAfter(first.getStartTime())) {
+                                // fitsInGap can be false, but if the possible end time is less than 1st job start
+                                // but check if the last job time is less than first start time
+                                if (!fitsInGap && lastJobTime.isBefore(first.getStartTime())
+                                        && !possibleEndTime.isAfter(first.getStartTime())) {
                                     fitsInGap = true;
                                 }
 
@@ -364,11 +376,21 @@ public class JobServiceImpl implements JobService {
                                     break;
                                 }
 
-                                long diff = Duration.between(first.getEndTime(), second.getStartTime()).getSeconds();
-
                                 // There is no free slot is available at exact calculated time
                                 // But may have free slots after calculated time. Check it
-                                if (diff >= totalServiceTime) {
+
+                                long diff = Duration.between(first.getEndTime(), second.getStartTime()).getSeconds();
+
+                                // Yes but last job time must never after second start time
+                                // ex: last: 13:15, first end: 9:25 second start 11:00 (wrong version).
+                                // Now this false. Should not happen. If it happened the free slot going to be 9:25-11:00
+                                // ex: last: can be 9.25-11:00*, first end: 9:25 second start 11:00 (correct version).
+                                // *11 can be but different going to be 0. So diff >= totalServiceTime going to be false.
+                                boolean isLastJobTimeBefore2ndJobStart
+                                        = lastJobTime.isBefore(second.getStartTime());
+
+
+                                if (diff >= totalServiceTime && isLastJobTimeBefore2ndJobStart) {
                                     //this is that free slot
                                     log.info("free time found \uD83D\uDD0D: {} and {}", first.getEndTime(), second.getStartTime());
                                     freeStart = first.getEndTime();
@@ -826,7 +848,10 @@ public class JobServiceImpl implements JobService {
                                         lastJobTime, LocalTime.ofSecondOfDay(totalServiceTime), suitablePoint.getCloseTime()
                                 );
 
-                                log.info("👉 possible end time: {}", possibleEndTime);
+                                if (possibleEndTime == null) {
+                                    jobServiceHelper.clearDummyData(customer.getId(), job.getId());
+                                    return CONFLICT("Sorry, No available service slots for " + prepareJob.getAppointmentDate());
+                                }
 
                                 boolean isAvailable = false;
 
@@ -839,11 +864,16 @@ public class JobServiceImpl implements JobService {
                                         continue;
                                     }
 
+                                    // last job time is equal or grater than 1st job end time
+                                    // possible end time is equal or less than second job start time
                                     boolean fitsInGap =
                                             !lastJobTime.isBefore(first.getEndTime()) &&   // start >= first end
                                                     !possibleEndTime.isAfter(second.getStartTime()); // end <= second start
 
-                                    if (!fitsInGap && !possibleEndTime.isAfter(first.getStartTime())) {
+                                    // fitsInGap can be false, but if the possible end time is less than 1st job start
+                                    // but check if the last job time is less than first start time
+                                    if (!fitsInGap && lastJobTime.isBefore(first.getStartTime())
+                                            && !possibleEndTime.isAfter(first.getStartTime())) {
                                         fitsInGap = true;
                                     }
 
@@ -852,11 +882,19 @@ public class JobServiceImpl implements JobService {
                                         break;
                                     }
 
-                                    long diff = Duration.between(first.getEndTime(), second.getStartTime()).getSeconds();
-
                                     // There is no free slot is available at exact calculated time
                                     // But may have free slots after calculated time. Check it
-                                    if (diff >= totalServiceTime) {
+                                    long diff = Duration.between(first.getEndTime(), second.getStartTime()).getSeconds();
+
+                                    // Yes but last job time must never after second start time
+                                    // ex: last: 13:15, first end: 9:25 second start 11:00 (wrong version).
+                                    // Now this false. Should not happen. If it happened the free slot going to be 9:25-11:00
+                                    // ex: last: can be 9.25-11:00*, first end: 9:25 second start 11:00 (correct version).
+                                    // *11 can be but different going to be 0. So diff >= totalServiceTime going to be false.
+                                    boolean isLastJobTimeBefore2ndJobStart
+                                            = lastJobTime.isBefore(second.getStartTime());
+
+                                    if (diff >= totalServiceTime && isLastJobTimeBefore2ndJobStart) {
                                         //this is that free slot
                                         log.info("free time found \uD83D\uDD0D: {} and {}", first.getEndTime(), second.getStartTime());
                                         freeStart = first.getEndTime();
@@ -1283,6 +1321,30 @@ public class JobServiceImpl implements JobService {
 
             List<JobAtPoint> jobAtPoints = jobAtPointRepository.findAllByJobId(jobDetail.getJobId());
 
+            Integer status = jobAtPoints.stream()
+                    .anyMatch(jobAtPoint -> jobAtPoint.getStatus() == JobStatus.IN_SERVICE) ? JobStatus.IN_SERVICE : null;
+
+            int completedPercentage = 0;
+
+            if (status == null) {
+                List<JobAtPoint> completedJobs = jobAtPoints.stream()
+                        .filter(jobAtPoint -> jobAtPoint.getStatus() == JobStatus.COMPLETED).toList();
+
+                completedPercentage = Math.round(((float) completedJobs.size() / jobAtPoints.size()) * 100);
+
+                if (completedPercentage == 0) {
+                    if (jobAtPoints.getFirst().getStatus() == JobStatus.TIMEOUT) {
+                        status = JobStatus.TIMEOUT;
+                    } else {
+                        status = JobStatus.PENDING;
+                    }
+                } else if (completedPercentage == 100) {
+                    status = JobStatus.COMPLETED;
+                } else {
+                    status = JobStatus.IGNORE;
+                }
+            }
+
             // find service point
             List<String> servicePoints = jobAtPoints.stream().map(j -> j.getServicePoint().getName()).distinct().toList();
             jobListDetails.setPoints(servicePoints);
@@ -1301,7 +1363,9 @@ public class JobServiceImpl implements JobService {
             );
 
             // find status
-            jobListDetails.setStatus(jobDetail.getStatus());
+            jobListDetails.setStatus(status);
+            jobListDetails.setCompletedPercentage(completedPercentage);
+            jobListDetails.setAllowToServe(jobAtPoints.getFirst().isAllowToServe());
 
             jobListDetailsList.add(jobListDetails);
         }
@@ -1310,7 +1374,7 @@ public class JobServiceImpl implements JobService {
     }
 
     @Override
-    public ResponseEntity<?> jobDetails(Integer jobId, HttpServletRequest request) {
+    public ResponseEntity<?> allowToServe(Integer jobId, HttpServletRequest request) {
         log.info(request.getRequestURI());
 
         Job job = jobRepository.getJobById(jobId);
@@ -1319,143 +1383,24 @@ public class JobServiceImpl implements JobService {
             return CONFLICT("Job not found");
         }
 
-        Customer customer = job.getCustomer();
-
-        Cluster cluster = null;
-
-        if (job.getClusterId() != null) {
-            cluster = clusterRepository.findByIdAndDeletedIsFalse(job.getClusterId());
-
-            if (cluster == null) {
-                return CONFLICT("Cluster not found");
-            }
-        }
-
         List<JobAtPoint> jobsAtPoints = jobAtPointRepository.findAllByJobId(jobId);
 
-        List<SubJobDetails> subJobDetailsList = new ArrayList<>();
+        //get the first job(going to be next). Check it's point has an agent now.
+        //if not send notifications to admins and managers.
+        Integer loginAgentId = servicePointRepository
+                .loginAgentAtPoint(jobsAtPoints.getFirst().getServicePoint().getId());
 
-        boolean inServing = false;
-        List<Integer> completedJobIds = new ArrayList<>();
-        int totalPrice = 0;
-        int downPayment = 0;
-        String currentPoint = null;
-
-        if (!jobsAtPoints.isEmpty()) {
-            for (JobAtPoint jobAtPoint : jobsAtPoints) {
-
-                SubJobDetails jobDetail = SubJobDetails.builder()
-                        .service(jobAtPoint.getService().getName())
-                        .pointName(jobAtPoint.getServicePoint().getName())
-                        .startTime(jobAtPoint.getStartTime())
-                        .endTime(jobAtPoint.getEndTime())
-                        .estimatedEndTime(true)
-                        .status(JobStatus.PENDING)
-                        .build();
-
-                if (jobAtPoint.getStatus() == JobStatus.IN_SERVICE) {
-                    jobDetail.setStatus(JobStatus.IN_SERVICE);
-                    inServing = true;
-                    currentPoint = jobAtPoint.getServicePoint().getName();
-                } else {
-                    if (jobAtPoint.getStatus() == JobStatus.COMPLETED) {
-                        completedJobIds.add(jobAtPoint.getId());
-                        jobDetail.setStatus(JobStatus.COMPLETED);
-                        jobDetail.setCompleted(true);
-                        jobDetail.setActualEndTime(jobAtPoint.getActualEndTime());
-                        jobDetail.setEstimatedEndTime(false);
-                    }
-                }
-
-                subJobDetailsList.add(jobDetail);
-
-                totalPrice = totalPrice + jobAtPoint.getService().getTotalPrice();
-                downPayment = downPayment + jobAtPoint.getService().getDownPrice();
-
-            }
+        if (loginAgentId == null) {
+            //todo send notification to people
         }
 
-        String jobStatus = "Pending";
+        for (JobAtPoint jobAtPoint : jobsAtPoints) {
+            jobAtPoint.setCustomerArrivedTime(LocalTime.now(ZoneId.of(ASIA_COLOMBO_TIME_ZONE)));
+            jobAtPoint.setAllowToServe(true);
 
-        if (inServing) {
-            jobStatus = "Serving";
-        } else {
-            if (completedJobIds.size() == jobsAtPoints.size()) {
-                jobStatus = "Completed";
-            }
+            jobAtPointRepository.save(jobAtPoint);
         }
 
-        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("hh:mm a");
-
-        JobDetails jobDetails = JobDetails.builder()
-                .id(job.getId())
-                .customer(customer.getCustomer())
-                .customerName(customer.getName())
-                .pointName(currentPoint)
-                //todo: add later
-                .customerEmail(null)
-                .customerPhone(customer.getPhone())
-                .serviceName(cluster != null ? cluster.getName() : "Custom Service")
-                .centerName(job.getServiceCenter().getName())
-                .status(jobStatus)
-                .totalAmount((double) totalPrice)
-                .paidAmount((double) downPayment)
-                .serviceFee(job.getServiceCenter().getServiceProvider().getServiceFee())
-                .createdAt(job.getCreatedDate() + " at " + job.getCreatedTime().format(timeFormatter))
-                .appointmentMethod(jobServiceHelper.jobType(job.getJobType()))
-                .description(job.getDescription())
-                .timeline(subJobDetailsList)
-                .verifiedJob(job.isPaymentVerified())
-                .build();
-
-        return DATA(jobDetails);
-    }
-
-    @Override
-    @Scheduled(fixedRate = 60000)
-    public void deleteExpiredDummyJobs() {
-        LocalDate date = LocalDate.now();
-
-        List<Integer> dummyDataIds = jobAtPointRepository
-                .getDummyJobIds(date);
-
-        log.info("dummy jobs checking \uD83D\uDD0E");
-        if (!dummyDataIds.isEmpty()) {
-            log.info("has dummy jobs");
-            LocalTime time = LocalTime.now().minusMinutes(4);
-
-            List<JobAtPoint> expiredJobsAtPoints = jobAtPointRepository.findExpiredDummy(date, time);
-
-            List<Job> expiredJobs = expiredJobsAtPoints.stream().map(
-                    JobAtPoint::getJob
-            ).toList();
-
-            List<Customer> expiredCustomers = expiredJobs.stream().map(
-                    Job::getCustomer
-            ).toList();
-
-            if (!expiredJobsAtPoints.isEmpty()) {
-                log.info("{} jobs at points destroying \uD83D\uDD25", expiredJobsAtPoints.size());
-                jobAtPointRepository.deleteAll(expiredJobsAtPoints);
-                jobAtPointRepository.flush();
-                log.info("jobs at points destroyed ✅");
-            }
-
-            if (!expiredJobs.isEmpty()) {
-                log.info("{} jobs destroying \uD83D\uDD25", expiredJobs.size());
-                jobRepository.deleteAll(expiredJobs);
-                jobAtPointRepository.flush();
-                log.info("jobs destroyed ✅");
-            }
-
-            if (!expiredCustomers.isEmpty()) {
-                log.info("{} customers destroying \uD83D\uDD25", expiredCustomers.size());
-                customerRepository.deleteAll(expiredCustomers);
-                jobAtPointRepository.flush();
-                log.info("customers destroyed ✅");
-            }
-        } else {
-            log.info("no dummy jobs");
-        }
+        return SUCCESS("Customer arrived for " + job.getId());
     }
 }

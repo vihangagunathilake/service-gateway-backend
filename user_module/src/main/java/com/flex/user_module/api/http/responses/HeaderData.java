@@ -22,4 +22,6 @@ public class HeaderData {
     private String userName;
     private String serviceCenter;
     private String image;
+    private String loggedInPoint;
+    private Integer loggedInPointId;
 }

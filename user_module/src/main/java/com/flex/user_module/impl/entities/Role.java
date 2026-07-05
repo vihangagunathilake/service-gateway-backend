@@ -28,6 +28,7 @@ public class Role {
     @JoinColumn(name = "serviceProviderId")
     private ServiceProvider serviceProvider;
     private boolean restricted;
+    private boolean employee;
     private boolean deleted;
 
     public Role(Integer id) {

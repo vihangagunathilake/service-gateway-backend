@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface ServicePointRepository extends JpaRepository<ServicePoint, Integer> {
@@ -26,6 +27,11 @@ public interface ServicePointRepository extends JpaRepository<ServicePoint, Inte
             "        s.temporaryClosed, s.deleted, " +
             "        s.id, s.name")
     List<ServicePoint> servicePointsByCenter(@Param("serviceCenterId") Integer serviceCenterId);
+
+    @Query("SELECT new ServicePoint(s.id, s.name) " +
+            "FROM ServicePoint s " +
+            "WHERE s.serviceCenter.id=:serviceCenterId and s.deleted is false")
+    List<ServicePoint> servicePointLightDetailsByCenter(@Param("serviceCenterId") Integer serviceCenterId);
 
     @Query("SELECT s.id FROM ServicePoint s WHERE s.serviceCenter.id=:serviceCenterId and s.deleted is false")
     List<Integer> servicePointIdsByCenter(@Param("serviceCenterId") Integer serviceCenterId);
@@ -67,4 +73,13 @@ public interface ServicePointRepository extends JpaRepository<ServicePoint, Inte
             @Param("serviceIds") List<Integer> serviceIds,
             @Param("size") long size
     );
+
+    @Query("""
+        SELECT al.user.id
+        FROM AgentLogin al
+        WHERE al.servicePoint.id = :servicePointId
+          AND date(al.loginTime) = current_date()
+          AND al.logoutTime IS NULL
+    """)
+    Integer loginAgentAtPoint(@Param("servicePointId") Integer servicePointId);
 }

@@ -1,6 +1,6 @@
 package com.flex.user_module.impl.services;
 
-import com.flex.common_module.constants.Colors;
+import com.flex.common_module.CommonMethods;
 import com.flex.common_module.http.pagination.Pagination;
 import com.flex.common_module.http.pagination.Sorting;
 import com.flex.common_module.mails.services.EmailService;
@@ -8,29 +8,34 @@ import com.flex.common_module.security.http.response.UserClaims;
 import com.flex.common_module.security.utils.CryptoUtil;
 import com.flex.common_module.security.utils.HashUtil;
 import com.flex.common_module.security.utils.JwtUtil;
+import com.flex.user_module.api.http.responses.*;
+import com.flex.job_module.constants.JobStatus;
+import com.flex.job_module.impl.entities.Customer;
+import com.flex.job_module.impl.entities.Job;
+import com.flex.job_module.impl.entities.JobAtPoint;
+import com.flex.job_module.impl.repositories.JobAtPointRepository;
+import com.flex.job_module.impl.repositories.JobRepository;
+import com.flex.service_module.impl.entities.Cluster;
 import com.flex.service_module.impl.entities.ServiceCenter;
+import com.flex.service_module.impl.entities.ServicePoint;
 import com.flex.service_module.impl.entities.ServiceProvider;
+import com.flex.service_module.impl.repositories.ClusterRepository;
 import com.flex.service_module.impl.repositories.ServiceCenterRepository;
 import com.flex.service_module.impl.repositories.ServiceProviderRepository;
 import com.flex.user_module.api.DTO.CenterUsers;
 import com.flex.user_module.api.http.requests.*;
-import com.flex.user_module.api.http.responses.HeaderData;
-import com.flex.user_module.api.http.responses.LoginResponse;
-import com.flex.user_module.api.http.responses.UserData;
-import com.flex.user_module.api.http.responses.UserProfileData;
 import com.flex.user_module.api.services.UserService;
 import com.flex.user_module.cache.RoleCacheService;
-import com.flex.user_module.events.UserCreatedEvent;
-import com.flex.user_module.events.UserUpdatedEvent;
+import com.flex.user_module.constants.UserConstant;
 import com.flex.user_module.impl.entities.*;
 import com.flex.user_module.impl.entities.RolePermissionAccess;
 import com.flex.user_module.impl.repositories.*;
 import com.flex.user_module.impl.services.helpers.UserServiceHelper;
-import io.jsonwebtoken.Claims;
 import jakarta.mail.MessagingException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.usertype.UserType;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -44,6 +49,7 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -81,11 +87,17 @@ public class UserServiceImpl implements UserService {
     private final PermissionRepository permissionRepository;
     private final RolePermissionRepository rolePermissionRepository;
     private final RolePermissionAccessRepository rolePermissionAccessRepository;
-    private final UserPasswordTokenRepository passwordTokenRepository;
+    private final AgentLoginRepository agentLoginRepository;
     private final UserPasswordTokenRepository userPasswordTokenRepository;
+
+    private final JobRepository jobRepository;
+    private final ClusterRepository clusterRepository;
+    private final JobAtPointRepository jobAtPointRepository;
+    private final AgentJobRepository agentJobRepository;
 
 
     @Override
+    @Transactional
     public ResponseEntity<?> register(Register register, HttpServletRequest request) throws MessagingException {
         log.info(request.getRequestURI(), "{} body - {}", register);
 
@@ -102,7 +114,7 @@ public class UserServiceImpl implements UserService {
         List<Permission> permissions = permissionRepository.findAll();
 
         if (permissions.isEmpty()) {
-            return CONFLICT("Permissions not found");
+            return CONFLICT("Permissions are empty for users");
         }
 
         String providerId = UUID.randomUUID()
@@ -148,6 +160,37 @@ public class UserServiceImpl implements UserService {
                                 .build()
         ).toList();
 
+        List<Permission> employeePermissions = permissionRepository.getAllByEmployeeIsTrue();
+
+        if (employeePermissions.isEmpty()) {
+            return CONFLICT("Employee permissions are empty");
+        }
+
+        Permission permitThis = permissionRepository.getPermissionByPermission("Permit This");
+
+        if (permitThis == null) {
+            return CONFLICT("Permit this permission is not found");
+        }
+
+        employeePermissions.add(permitThis);
+
+        // create employee entity
+        Role employee = Role.builder().role("Employee")
+                .serviceProvider(savedSP)
+                .employee(true)
+                .build();
+
+        List<RolePermission> employeeRolePermission = employeePermissions.stream().map(
+                p -> RolePermission.builder().role(employee).permission(p).build()).toList();
+
+        List<RolePermissionAccess> employeeRolePermissionAccesses = employeeRolePermission.stream().map(
+                rolePermission ->
+                        RolePermissionAccess.builder()
+                                .all_permission(true)
+                                .rolePermission(rolePermission)
+                                .build()
+        ).toList();
+
         // create user entity for admin
         User user = User.builder()
                 .fName(register.getAdminFName())
@@ -182,6 +225,11 @@ public class UserServiceImpl implements UserService {
         roleRepository.save(admin);
         rolePermissionRepository.saveAll(rolePermissions);
         rolePermissionAccessRepository.saveAll(rolePermissionAccesses);
+
+        roleRepository.save(employee);
+        rolePermissionRepository.saveAll(employeeRolePermission);
+        rolePermissionAccessRepository.saveAll(employeeRolePermissionAccesses);
+
         userRepository.save(user);
         userDetailsRepository.save(userDetails);
 
@@ -271,6 +319,8 @@ public class UserServiceImpl implements UserService {
                 .refreshToken(refreshToken)
                 .password(user.isResetPassword())
                 .forgot(user.isForgotPassword())
+                .userType(user.getUserType())
+                .serviceCenter(user.getUserType() == 2 ? user.getServiceCenter().getId() : null)
                 .build();
 
         return DATA(response);
@@ -289,7 +339,7 @@ public class UserServiceImpl implements UserService {
         if (changePassword.isForgot()) {
 
             List<UserPasswordToken> resetPasswordTokens = userPasswordTokenRepository.getNonExpiredUserPasswordTokens(
-                    user.getId(), changePassword.getEmailString(), LocalDateTime.now(ZoneId.of("Asia/Colombo"))
+                    user.getId(), changePassword.getEmailString(), CommonMethods.getCurrentDateTime()
             );
 
             if (resetPasswordTokens.isEmpty()) {
@@ -343,7 +393,7 @@ public class UserServiceImpl implements UserService {
         }
 
         List<UserPasswordToken> resetPasswordTokens = userPasswordTokenRepository.getNonExpiredUserPasswordTokens(
-                user.getId(), changePassword.getNewPassword(), LocalDateTime.now(ZoneId.of("Asia/Colombo"))
+                user.getId(), changePassword.getNewPassword(), CommonMethods.getCurrentDateTime()
         );
 
         if (!resetPasswordTokens.isEmpty()) {
@@ -363,7 +413,7 @@ public class UserServiceImpl implements UserService {
 
         UserPasswordToken userPasswordToken = UserPasswordToken.builder()
                 .token(newToken)
-                .expireTime(LocalDateTime.now().plusMinutes(5))
+                .expireTime(CommonMethods.getCurrentDateTime().plusMinutes(5))
                 .user(user)
                 .build();
 
@@ -390,6 +440,26 @@ public class UserServiceImpl implements UserService {
             return CONFLICT("User not found");
         }
 
+        if (user.getUserType() == EMPLOYEE) {
+            AgentLogin agentLogin = agentLoginRepository.getAgentLogin(user.getId());
+
+            if (agentLogin != null) {
+
+                List<AgentJob> agentJobs = agentJobRepository.getServingJobByAgentInPoint(user.getId(),
+                        agentLogin.getServicePoint().getId(),
+                        CommonMethods.getCurrentDate());
+
+                if (!agentJobs.isEmpty()) {
+                    return CONFLICT("Please end the job before leaving");
+                }
+
+                agentLogin.setLogoutTime(CommonMethods.getCurrentDateTime());
+
+                agentLoginRepository.save(agentLogin);
+
+            }
+        }
+
         userServiceHelper.logoutFromPreviousLogins(user.getId());
         roleCacheService.evictPermissionsCache(user.getId(), user.getRole().getRole());
 
@@ -412,16 +482,28 @@ public class UserServiceImpl implements UserService {
             return CONFLICT("User not found");
         }
 
+        ServicePoint loggedInPoint = null;
+
+        if (user.getUserType() == EMPLOYEE) {
+            AgentLogin agentLogin = agentLoginRepository.getAgentLogin(user.getId());
+
+            if (agentLogin != null) {
+                loggedInPoint = agentLogin.getServicePoint();
+            }
+        }
+
         return DATA(
                 HeaderData.builder()
-                        .userType(user.getUserType() == 0 ? "USER"
-                                : user.getUserType() == 1 ? "ADMIN"
-                                        : "CUSTOMER")
+                        .userType(user.getUserType() == 0 ? ADMIN_T
+                                : user.getUserType() == 1 ? USER_T
+                                        : EMPLOYEE_T)
                         .email(user.getEmail())
                         .providerId(user.getServiceProvider().getProviderId())
                         .serviceCenter(user.getServiceProvider().getName())
                         .userName(user.getFName())
                         .image(user.getProfileImageUrl())
+                        .loggedInPoint(loggedInPoint != null ? loggedInPoint.getName() : null)
+                        .loggedInPointId(loggedInPoint != null ? loggedInPoint.getId() : null)
                         .build());
     }
 
@@ -495,7 +577,7 @@ public class UserServiceImpl implements UserService {
 
         if (prevUserDetails != null
                 && !prevUserDetails.getUser().isDeleted()
-                && prevUserDetails.getUser().getUserType() == USER) {
+                && prevUserDetails.getUser().getUserType() == EMPLOYEE) {
             return CONFLICT("Employee already exist by this NIC");
         }
 
@@ -650,7 +732,13 @@ public class UserServiceImpl implements UserService {
             return CONFLICT("Service provider not found");
         }
 
-        Role role = roleRepository.findByIdAndDeletedIsFalse(addUser.getRoleId());
+        Role role;
+
+        if (addUser.getUserType() != 2) {
+            role = roleRepository.findByIdAndDeletedIsFalse(addUser.getRoleId());
+        } else {
+            role = roleRepository.findByServiceProvider_IdAndEmployeeIsTrue(serviceProvider.getId());
+        }
 
         if (role == null) {
             return CONFLICT("Role not found");
@@ -668,16 +756,6 @@ public class UserServiceImpl implements UserService {
             return CONFLICT("Nic already exists");
         }
 
-        int userType;
-
-        if (addUser.getUserType().equals("ADMIN")) {
-            userType = 1;
-        } else if (addUser.getUserType().equals("EMPLOYEE")) {
-            userType = 2;
-        } else {
-            userType = 0;
-        }
-
         ServiceCenter serviceCenter = null;
 
         if (addUser.getServiceCenterId() != null) {
@@ -691,7 +769,7 @@ public class UserServiceImpl implements UserService {
                 .role(role)
                 .serviceCenter(serviceCenter)
                 .serviceProvider(serviceProvider)
-                .userType(userType)
+                .userType(addUser.getUserType())
                 .build();
 
         // adding role notification is happening in notification_module
@@ -927,18 +1005,8 @@ public class UserServiceImpl implements UserService {
             existingUser.setEmail(updateUser.getEmail());
         }
 
-        int userType;
-
-        if (updateUser.getUserType().equals("ADMIN")) {
-            userType = 1;
-        } else if (updateUser.getUserType().equals("EMPLOYEE")) {
-            userType = 2;
-        } else {
-            userType = 0;
-        }
-
-        if (existingUser.getUserType() != userType) {
-            existingUser.setUserType(userType);
+        if (existingUser.getUserType() != updateUser.getUserType()) {
+            existingUser.setUserType(updateUser.getUserType());
         }
 
         if (updateUser.getRoleId() != null
@@ -1013,10 +1081,8 @@ public class UserServiceImpl implements UserService {
             existingUser.setEmail(updateUser.getEmail());
         }
 
-        int userType = Integer.parseInt(updateUser.getUserType());
-
-        if (existingUser.getUserType() != userType) {
-            existingUser.setUserType(userType);
+        if (existingUser.getUserType() != updateUser.getUserType()) {
+            existingUser.setUserType(updateUser.getUserType());
         }
 
         if (updateUser.getRoleId() != null
@@ -1161,4 +1227,128 @@ public class UserServiceImpl implements UserService {
 
         return SUCCESS("Removed User");
     }
+
+    @Override
+    public ResponseEntity<?> jobDetails(Integer jobId, HttpServletRequest request) {
+        log.info(request.getRequestURI());
+
+        Job job = jobRepository.getJobById(jobId);
+
+        if (job == null) {
+            return CONFLICT("Job not found");
+        }
+
+        Customer customer = job.getCustomer();
+
+        Cluster cluster = null;
+
+        if (job.getClusterId() != null) {
+            cluster = clusterRepository.findByIdAndDeletedIsFalse(job.getClusterId());
+
+            if (cluster == null) {
+                return CONFLICT("Cluster not found");
+            }
+        }
+
+        List<JobAtPoint> jobsAtPoints = jobAtPointRepository.findAllByJobId(jobId);
+
+        List<SubJobDetails> subJobDetailsList = new ArrayList<>();
+
+        boolean inServing = false;
+        boolean timeoutJob = false;
+        List<Integer> completedJobIds = new ArrayList<>();
+        int totalPrice = 0;
+        int downPayment = 0;
+        String currentPoint = null;
+        String customerArrivalTime = null;
+
+        if (!jobsAtPoints.isEmpty()) {
+            for (JobAtPoint jobAtPoint : jobsAtPoints) {
+
+                customerArrivalTime = jobAtPoint.getCustomerArrivedTime() != null
+                        ? CommonMethods.timeFormat(jobAtPoint.getCustomerArrivedTime()) : null;
+
+                SubJobDetails jobDetail = SubJobDetails.builder()
+                        .service(jobAtPoint.getService().getName())
+                        .pointName(jobAtPoint.getServicePoint().getName())
+                        .startTime(CommonMethods.timeFormat(jobAtPoint.getStartTime()))
+                        .endTime(CommonMethods.timeFormat(jobAtPoint.getEndTime()))
+                        .estimatedEndTime(true)
+                        .status(JobStatus.PENDING)
+                        .build();
+
+                AgentJob agentJob = agentJobRepository.findByJobAtPoint_id(jobAtPoint.getId());
+
+
+                if (jobAtPoint.getStatus() == JobStatus.IN_SERVICE) {
+                    jobDetail.setStatus(JobStatus.IN_SERVICE);
+                    inServing = true;
+                    currentPoint = jobAtPoint.getServicePoint().getName();
+
+                    jobDetail.setActualStartTime(CommonMethods.timeFormat(agentJob.getStartTime()));
+                    jobDetail.setAgent(agentJob.getAgent().getFName() + " " + agentJob.getAgent().getLName());
+
+                } else {
+                    if (jobAtPoint.getStatus() == JobStatus.COMPLETED) {
+                        completedJobIds.add(jobAtPoint.getId());
+                        jobDetail.setStatus(JobStatus.COMPLETED);
+                        jobDetail.setCompleted(true);
+                        jobDetail.setActualEndTime(CommonMethods.timeFormat(jobAtPoint.getActualEndTime()));
+                        jobDetail.setEstimatedEndTime(false);
+                        jobDetail.setActualStartTime(CommonMethods.timeFormat(agentJob.getStartTime()));
+                        jobDetail.setAgent(agentJob.getAgent().getFName() + " " + agentJob.getAgent().getLName());
+                        jobDetail.setActualEndTime(CommonMethods.timeFormat(agentJob.getEndTime()));
+                    } else if (jobAtPoint.getStatus() == JobStatus.TIMEOUT) {
+                        jobDetail.setStatus(JobStatus.TIMEOUT);
+                        timeoutJob = true;
+                    }
+                }
+
+                subJobDetailsList.add(jobDetail);
+
+                totalPrice = totalPrice + jobAtPoint.getService().getTotalPrice();
+                downPayment = downPayment + jobAtPoint.getService().getDownPrice();
+
+            }
+        }
+
+        String jobStatus = "Pending";
+
+        if (inServing) {
+            jobStatus = "Serving";
+        } else if (timeoutJob) {
+            jobStatus = "Timeout";
+        }
+        else {
+            if (completedJobIds.size() == jobsAtPoints.size()) {
+                jobStatus = "Completed";
+            }
+        }
+
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("hh:mm a");
+
+        JobDetails jobDetails = JobDetails.builder()
+                .id(job.getId())
+                .customer(customer.getCustomer())
+                .customerName(customer.getName())
+                .pointName(currentPoint)
+                .customerEmail(null)
+                .customerPhone(customer.getPhone())
+                .serviceName(cluster != null ? cluster.getName() : "Custom Service")
+                .centerName(job.getServiceCenter().getName())
+                .status(jobStatus)
+                .totalAmount((double) totalPrice)
+                .paidAmount((double) downPayment)
+                .serviceFee(job.getServiceCenter().getServiceProvider().getServiceFee())
+                .createdAt(job.getCreatedDate() + " at " + job.getCreatedTime().format(timeFormatter))
+                .appointmentMethod(userServiceHelper.jobType(job.getJobType()))
+                .description(job.getDescription())
+                .customerArrivedTime(customerArrivalTime)
+                .timeline(subJobDetailsList)
+                .verifiedJob(job.isPaymentVerified())
+                .build();
+
+        return DATA(jobDetails);
+    }
+
 }

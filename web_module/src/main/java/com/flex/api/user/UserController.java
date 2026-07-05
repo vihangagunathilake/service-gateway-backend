@@ -180,4 +180,10 @@ public class UserController {
     public ResponseEntity<?> removeUserFromCenter(@PathVariable Integer id, HttpServletRequest request) {
         return userService.removeUserFromCenter(id, request);
     }
+
+    @GetMapping("/job/{id}/details")
+    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PT)")
+    public ResponseEntity<?> jobDetails(@PathVariable Integer id, HttpServletRequest request) {
+        return userService.jobDetails(id, request);
+    }
 }

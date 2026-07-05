@@ -53,6 +53,11 @@ public class ServicePoint {
         this.id = id;
     }
 
+    public ServicePoint(Integer id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+
     public ServicePoint(Integer id, String name, String shortName, LocalTime openTime, LocalTime closeTime, boolean temporaryClosed,
                         boolean deleted, Integer serviceCenterId, String serviceCenterName, Long serviceCount) {
         this.id = id;

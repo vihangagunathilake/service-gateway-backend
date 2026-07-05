@@ -18,6 +18,8 @@ import lombok.NoArgsConstructor;
 public class LoginResponse {
     private String token;
     private String refreshToken;
+    private Integer userType;
+    private Integer serviceCenter;
     private boolean password;
     private boolean forgot;
 }

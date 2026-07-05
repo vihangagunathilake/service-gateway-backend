@@ -1,21 +1,37 @@
-insert into permissions(permission) value ('Permit This');
-insert into permissions(permission) value ('Payments Verifier');
-insert into permissions(permission) value ('Role Management');
-insert into permissions(permission) value ('Permission Access');
-insert into permissions(permission) value ('User Management');
-insert into permissions(permission) value ('Decrypt Data');
-insert into permissions(permission) value ('Service Provider');
-insert into permissions(permission) value ('Centers Management');
-insert into permissions(permission) value ('Services Management');
-insert into permissions(permission) value ('Center Employee M.');
-insert into permissions(permission) value ('Points Management');
-insert into permissions(permission) value ('Cluster Management');
-insert into permissions(permission) value ('Holiday Management');
-insert into permissions(permission) value ('Notification Permission');
-insert into permissions(permission) value ('Notification Management');
-insert into permissions(permission) value ('Jobs Management');
-insert into permissions(permission) value ('Employee Management');
-insert into permissions(permission) value ('Assigned Clusters Management');
+insert into permissions(permission, employee) value ('Permit This', false);
+insert into permissions(permission, employee) value ('Payments Verifier', false);
+insert into permissions(permission, employee) value ('Role Management', false);
+insert into permissions(permission, employee) value ('Permission Access', false);
+insert into permissions(permission, employee) value ('User Management', false);
+insert into permissions(permission, employee) value ('Decrypt Data', false);
+insert into permissions(permission, employee) value ('Service Provider', false);
+insert into permissions(permission, employee) value ('Centers Management', false);
+insert into permissions(permission, employee) value ('Services Management', false);
+insert into permissions(permission, employee) value ('Center Employee M.', false);
+insert into permissions(permission, employee) value ('Points Management', false);
+insert into permissions(permission, employee) value ('Cluster Management', false);
+insert into permissions(permission, employee) value ('Holiday Management', false);
+insert into permissions(permission, employee) value ('Notification Permission', false);
+insert into permissions(permission, employee) value ('Notification Management', false);
+insert into permissions(permission, employee) value ('Jobs Management', false);
+insert into permissions(permission, employee) value ('Employee Management', false);
+insert into permissions(permission, employee) value ('Assigned Clusters Management', false);
+
+insert into permissions(permission, employee) value ('Employee Profile', true);
+insert into permissions(permission, employee) value ('Employee Jobs', true);
+
+insert into roles(deleted, restricted, role, service_provider_id) value (false, false, 'Employee', 1);
+
+insert into role_permissions(permission_id, role_id) value (19, 2);
+insert into role_permissions(permission_id, role_id) value (20, 2);
+insert into role_permissions(permission_id, role_id) value (1, 2);
+
+insert into role_permission_access(add_permission, all_permission, assign_permission, delete_permission, get_all_permission, get_permission, update_permission, role_permission_id)
+    VALUE (false, true, false, false, false, false, false, 19);
+insert into role_permission_access(add_permission, all_permission, assign_permission, delete_permission, get_all_permission, get_permission, update_permission, role_permission_id)
+    VALUE (false, true, false, false, false, false, false, 20);
+insert into role_permission_access(add_permission, all_permission, assign_permission, delete_permission, get_all_permission, get_permission, update_permission, role_permission_id)
+    VALUE (false, true, false, false, false, false, false, 21);
 
 insert into notification_type(deleted, type, name, description)
     value (false, 'JOB_CREATED', 'Job Creation', 'This option notifies you every time a new job is created.');

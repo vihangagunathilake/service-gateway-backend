@@ -1,4 +1,4 @@
-package com.flex.job_module.api.http.responses;
+package com.flex.user_module.api.http.responses;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,9 +14,11 @@ import java.time.LocalTime;
 public class SubJobDetails {
     private String service;
     private String pointName;
-    private LocalTime startTime;
-    private LocalTime endTime;
-    private LocalTime actualEndTime;
+    private String startTime;
+    private String endTime;
+    private String actualStartTime;
+    private String actualEndTime;
+    private String agent;
     private Integer status;
     private boolean completed;
     private boolean estimatedEndTime;

@@ -148,4 +148,12 @@ public class UserServiceHelper {
     private String setImageUrl(String imageUrl, Integer id, String imageExtension) {
         return imageUrl + id + "." + imageExtension;
     }
+
+    public String jobType(int jobType) {
+        if (jobType == 1) {
+            return "WEB";
+        }
+
+        return "UNDEFINED";
+    }
 }

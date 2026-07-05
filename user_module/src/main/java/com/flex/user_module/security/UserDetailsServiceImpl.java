@@ -39,7 +39,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
         List<GrantedAuthority> authorities;
 
-        if (user.getRole() == null) {
+        if (user.getUserType() != 2 && user.getRole() == null) {
             throw new MissingRoleException("User has no designation assigned");
         }
 

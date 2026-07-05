@@ -18,9 +18,13 @@ public interface PermissionRepository extends JpaRepository<Permission, Integer>
     @Query("SELECT p.permission FROM Permission p WHERE p.id in (:ids)")
     List<String> getPermissionsByIds(@Param("ids") List<Integer> ids);
 
-    @Query("SELECT p.permission FROM Permission p")
+    @Query("SELECT p.permission FROM Permission p WHERE p.employee = false")
     List<String> getPermissions();
 
     @Query("SELECT p FROM Permission p WHERE p.permission in (:permissions)")
     List<Permission> getAlPermissionsByPermission(@Param("permissions") List<String> permissions);
+
+    List<Permission> getAllByEmployeeIsTrue();
+
+    Permission getPermissionByPermission(String permission);
 }

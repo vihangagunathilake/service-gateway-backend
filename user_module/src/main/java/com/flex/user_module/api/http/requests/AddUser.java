@@ -14,7 +14,7 @@ public class AddUser {
     private String email;
     private String contact;
     private String nic;
-    private String userType;
+    private int userType;
     private Integer serviceCenterId;
     private Integer roleId;
 }

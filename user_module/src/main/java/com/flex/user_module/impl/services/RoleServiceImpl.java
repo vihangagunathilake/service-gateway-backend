@@ -47,7 +47,6 @@ public class RoleServiceImpl implements RoleService {
 
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
-    private final UserRepository userRepository;
     private final ServiceProviderRepository serviceProviderRepository;
     private final RolePermissionRepository rolePermissionRepository;
     private final RolePermissionAccessRepository rolePermissionAccessRepository;

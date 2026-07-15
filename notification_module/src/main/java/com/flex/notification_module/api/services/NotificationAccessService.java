@@ -10,4 +10,7 @@ public interface NotificationAccessService {
     ResponseEntity<?> getAllByUser(Integer userId, HttpServletRequest request);
 
     ResponseEntity<?> userNotifications(HttpServletRequest request);
+
+    ResponseEntity<?> roleNotifications(HttpServletRequest request);
+
 }

@@ -30,4 +30,11 @@ public interface NotificationAccessRepository extends JpaRepository<Notification
     List<User> getUsersByTypeAndServiceProvider(@Param("type") Integer type,
                                                 @Param("center") Integer center);
 
+    @Query("SELECT na.user FROM NotificationAccess na " +
+            "WHERE na.user.id in :userIds " +
+            "AND na.notificationType.id=:type " +
+            "AND na.disabled = false")
+    List<User> getUsersByIdsAndNotifyType(@Param("userIds") List<Integer> userIds,
+                                                @Param("type") Integer type);
+
 }

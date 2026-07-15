@@ -1,11 +1,15 @@
 package com.flex.notification_module.impl.entities;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.flex.user_module.impl.entities.User;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
 
 @Data
 @Entity
@@ -22,12 +26,15 @@ public class UserNotification {
     @JoinColumn(name = "user_id")
     private User user;
     @ManyToOne
-    @JoinColumn(name = "notification_id")
-    private Notification notification;
-    private Integer count;
+    @JoinColumn(name = "notification_type_id")
+    private NotificationType notificationType;
     private String description;
-    private String link;
-    private String type;
     private String title;
-    private boolean viewed;
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Colombo")
+    private LocalDate createdDate;
+    @JsonFormat(pattern = "HH:mm:ss", timezone = "Asia/Colombo")
+    private LocalTime createdTime;
+
+    private boolean markedAsView;
+    private boolean markedAsRead;
 }

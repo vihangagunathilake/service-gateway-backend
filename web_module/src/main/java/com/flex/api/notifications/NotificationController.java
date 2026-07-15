@@ -15,21 +15,27 @@ public class NotificationController {
 
     private final NotificationService notificationService;
 
-    @GetMapping("/summary")
+    @GetMapping("/notify")
     @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).NP)")
-    public ResponseEntity<?> notifications(HttpServletRequest request) {
-        return notificationService.notifications(request);
+    public ResponseEntity<?> notify(HttpServletRequest request) {
+        return notificationService.notify(request);
     }
 
-    @PutMapping("/all-notifications")
+    @GetMapping("/notified")
     @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).NP)")
-    public ResponseEntity<?> userNotifications(@RequestBody Pagination pagination, HttpServletRequest request) {
-        return notificationService.userNotifications(pagination, request);
+    public ResponseEntity<?> notified(HttpServletRequest request) {
+        return notificationService.notified(request);
     }
 
-    @PutMapping("/user-notification/{userNotificationId}/mark-as-read")
+    @GetMapping("/notify-no-agent")
     @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).NP)")
-    public ResponseEntity<?> markAsRead(@PathVariable Integer userNotificationId, HttpServletRequest request) {
-        return notificationService.markAsRead(userNotificationId, request);
+    public ResponseEntity<?> notifyNoAgent(HttpServletRequest request) {
+        return notificationService.notifyNoAgent(request);
+    }
+
+    @GetMapping("/timeout-jobs-count")
+    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).NP)")
+    public ResponseEntity<?> timeoutJobs(HttpServletRequest request) {
+        return notificationService.timeoutJobs(request);
     }
 }

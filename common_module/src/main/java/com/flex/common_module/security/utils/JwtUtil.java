@@ -29,7 +29,7 @@ import static com.flex.common_module.security.constants.SecurityConstants.SECRET
 public class JwtUtil {
     private static final Key key = Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
 
-//  todo: when generateToken
+// when generateToken
 //   Map<String, Object> claims = new HashMap<>();
 //   claims.put("userId", user.getId());
 //   claims.put("companyId", user.getCompany().getId());

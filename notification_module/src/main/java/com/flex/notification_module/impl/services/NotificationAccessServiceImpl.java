@@ -61,7 +61,7 @@ public class NotificationAccessServiceImpl implements NotificationAccessService 
         }
 
         List<NotificationType> notificationTypes = notificationTypeRepository
-                .findAll();
+                .getAllNotificationTypesById(assignNotification.getNotificationTypes());
 
         if (!notificationTypes.isEmpty()) {
 
@@ -141,5 +141,24 @@ public class NotificationAccessServiceImpl implements NotificationAccessService 
         }
 
         return DATA(userNotifications);
+    }
+
+    @Override
+    public ResponseEntity<?> roleNotifications(HttpServletRequest request) {
+        log.info(request.getRequestURI());
+
+        UserClaims userClaims = JwtUtil.getClaimsFromToken(request);
+
+        if (userClaims == null || userClaims.getUserId() == null) {
+            return CONFLICT("User not found");
+        }
+
+        User user = userRepository.findByIdAndDeletedIsFalse(userClaims.getUserId());
+
+        if (user == null) {
+            return CONFLICT("User not found");
+        }
+
+        return DATA(roleNotificationRepository.getRoleNotificationTypes(user.getRole().getId()));
     }
 }

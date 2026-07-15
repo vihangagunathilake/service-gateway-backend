@@ -12,13 +12,14 @@ import com.flex.job_module.api.http.responses.*;
 import com.flex.job_module.api.services.JobService;
 import com.flex.job_module.constants.JobStatus;
 import com.flex.job_module.constants.JobTypes;
-import com.flex.job_module.events.JobCreatedNotifyEvent;
+import com.flex.job_module.events.NoAgentInPointEvent;
 import com.flex.job_module.impl.entities.Customer;
 import com.flex.job_module.impl.entities.Job;
 import com.flex.job_module.impl.entities.JobAtPoint;
 import com.flex.job_module.impl.repositories.CustomerRepository;
 import com.flex.job_module.impl.repositories.JobAtPointRepository;
 import com.flex.job_module.impl.repositories.JobRepository;
+import com.flex.job_module.impl.services.algorithm.PrepareJobSubMethods;
 import com.flex.job_module.impl.services.helper.*;
 import com.flex.service_module.impl.entities.*;
 import com.flex.service_module.impl.repositories.*;
@@ -28,7 +29,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -67,6 +67,7 @@ public class JobServiceImpl implements JobService {
 
     private final JobServiceHelper jobServiceHelper;
     private final ServicesRepository servicesRepository;
+    private final PrepareJobSubMethods prepareJobSubMethods;
 
     private final ApplicationEventPublisher publisher;
 
@@ -257,6 +258,9 @@ public class JobServiceImpl implements JobService {
                                         )
                                         .sum();
 
+                                log.info("👉 totalSeconds: {}", totalSeconds);
+                                log.info("👉 minimumServiceTimeFromSec: {}", minimumServiceTimeFromSec);
+
                                 if (totalSeconds < minimumServiceTimeFromSec) {
                                     minimumServiceTimeFromSec = totalSeconds;
                                     suitablePoint = servicePoint;
@@ -282,10 +286,15 @@ public class JobServiceImpl implements JobService {
                                         }
                                     }
 
+                                    log.info("👉 nextStartTime time: {}", nextStartTime);
+                                    log.info("👉 minimumEndTime time: {}", minimumEndTime);
+                                    long gapSeconds = Duration.between(nextStartTime, minimumEndTime).getSeconds();
+                                    log.info("👉 gapSeconds time: {}", gapSeconds);
                                     if (nextStartTime.isBefore(minimumEndTime) && !hasEmptyPoints) {
                                         nextStartTime = minimumEndTime;
                                         allStartTimes.add(nextStartTime);
                                     }
+                                    log.info("👉 nextStartTime 2 time: {}", nextStartTime);
                                 }
                             } // this point has jobs, but no sub jobs for this creating job
                         } else {
@@ -404,7 +413,6 @@ public class JobServiceImpl implements JobService {
 
                                 LocalTime nextStart = lastJobTime; // default start
 
-                                log.info("----- next start time: {}", nextStart);
 
                                 prevJobs.sort(Comparator.comparing(JobAtPoint::getStartTime));
 
@@ -416,6 +424,16 @@ public class JobServiceImpl implements JobService {
                                     if (nextStart.isBefore(jobStart)) {
 
                                         long gapSeconds = Duration.between(nextStart, jobStart).getSeconds();
+
+                                        log.info("----- next start time: {}", nextStart);
+                                        log.info("----- job start time: {}", jobStart);
+                                        log.info("----- gap: {}", gapSeconds);
+                                        log.info("----- serviceSeconds: {}", serviceSeconds);
+
+                                        //if this is true, job can fit for this gap.
+                                        // ex: possible end time: 10:10, next job start at 10:45. So ✅
+                                        //but there can be another slot which can have closest start time
+                                        // ex: if this job start: 09:30 end 10:10
                                         if (gapSeconds >= serviceSeconds) {
                                             freeStart = nextStart;
                                             break;
@@ -748,7 +766,7 @@ public class JobServiceImpl implements JobService {
                                         return CONFLICT("Sorry, No available service slots for " + prepareJob.getAppointmentDate());
                                     }
 
-                                    //todo: keep this. Don't know this is for what
+                                    // keep this. Don't know this is for what
                                     if (nextStartTime.isBefore(previousJobs.getLast().getEndTime())) {
                                         log.info("nextStartTime: {}", nextStartTime);
 
@@ -1067,14 +1085,6 @@ public class JobServiceImpl implements JobService {
         jobRepository.save(job);
         jobRepository.flush();
 
-        publisher.publishEvent(
-                new JobCreatedNotifyEvent(
-                        job.getId(),
-                        job.getServiceCenter().getId(),
-                        job.getServiceCenter().getName()
-                )
-        );
-
         return SUCCESS("Job Created");
     }
 
@@ -1374,6 +1384,7 @@ public class JobServiceImpl implements JobService {
     }
 
     @Override
+    @Transactional
     public ResponseEntity<?> allowToServe(Integer jobId, HttpServletRequest request) {
         log.info(request.getRequestURI());
 
@@ -1390,8 +1401,16 @@ public class JobServiceImpl implements JobService {
         Integer loginAgentId = servicePointRepository
                 .loginAgentAtPoint(jobsAtPoints.getFirst().getServicePoint().getId());
 
+        log.info("loginAgentId: {}", loginAgentId);
+
+        //if not agent in point, create an event to notify this for notification module
+        //it will send notifications for management.
         if (loginAgentId == null) {
-            //todo send notification to people
+            publisher.publishEvent(
+                    new NoAgentInPointEvent(
+                            jobsAtPoints.getFirst().getServicePoint().getId()
+                    )
+            );
         }
 
         for (JobAtPoint jobAtPoint : jobsAtPoints) {

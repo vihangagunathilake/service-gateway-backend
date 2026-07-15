@@ -10,6 +10,9 @@ import java.util.List;
 public interface NotificationTypeRepository extends JpaRepository<NotificationType, Integer> {
     NotificationType getNotificationTypeByType(String type);
 
+    @Query("SELECT nt.type FROM NotificationType nt WHERE nt.crucial = true")
+    List<String> getCrucialNotificationTypes();
+
     @Query("SELECT nt FROM NotificationType nt WHERE nt.id in (:ids)")
     List<NotificationType> getAllNotificationTypesById(@Param("ids") List<Integer> ids);
 }

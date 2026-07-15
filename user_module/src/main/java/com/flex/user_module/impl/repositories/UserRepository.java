@@ -125,4 +125,7 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     List<UserPermissionAccessView> getUserPermissionAccess(
             @Param("userId") Integer userId
     );
+
+    @Query("SELECT u.id FROM User u WHERE u.serviceProvider.id=:id AND u.deleted = false")
+    List<Integer> getUserIdsByServiceProvider(@Param("id") Integer id);
 }

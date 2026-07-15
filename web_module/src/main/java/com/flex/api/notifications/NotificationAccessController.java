@@ -33,4 +33,10 @@ public class NotificationAccessController {
     public ResponseEntity<?> userOwnNotifications(HttpServletRequest request) {
         return notificationAccessService.userNotifications(request);
     }
+
+    @GetMapping("/role-notifications")
+    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PT)")
+    public ResponseEntity<?> roleNotifications(HttpServletRequest request) {
+        return notificationAccessService.roleNotifications(request);
+    }
 }

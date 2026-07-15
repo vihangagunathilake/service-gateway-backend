@@ -26,7 +26,6 @@ import com.flex.user_module.api.DTO.CenterUsers;
 import com.flex.user_module.api.http.requests.*;
 import com.flex.user_module.api.services.UserService;
 import com.flex.user_module.cache.RoleCacheService;
-import com.flex.user_module.constants.UserConstant;
 import com.flex.user_module.impl.entities.*;
 import com.flex.user_module.impl.entities.RolePermissionAccess;
 import com.flex.user_module.impl.repositories.*;
@@ -35,8 +34,6 @@ import jakarta.mail.MessagingException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.usertype.UserType;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -47,8 +44,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
@@ -73,8 +68,6 @@ public class UserServiceImpl implements UserService {
 
     private final UserServiceHelper userServiceHelper;
     private final RoleCacheService roleCacheService;
-
-    private final ApplicationEventPublisher publisher;
     private final EmailService emailService;
 
     private final ServiceProviderRepository serviceProviderRepository;

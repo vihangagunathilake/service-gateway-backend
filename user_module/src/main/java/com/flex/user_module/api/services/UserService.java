@@ -57,8 +57,6 @@ public interface UserService {
 
     ResponseEntity<?> updateUserProfile(AddUser addUser, HttpServletRequest request);
 
-    //todo create upload user image
-
     ResponseEntity<?> deleteUser(Integer id, HttpServletRequest request);
 
     ResponseEntity<?> assignEmployeesToCenters(EmployeeAssign employeeAssign, HttpServletRequest request);
@@ -70,6 +68,4 @@ public interface UserService {
     ResponseEntity<?> removeUserFromCenter(Integer userId, HttpServletRequest request);
 
     ResponseEntity<?> jobDetails(Integer jobId, HttpServletRequest request);
-
-    //todo create a service for customer registration - google OAuth
 }

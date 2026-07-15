@@ -19,5 +19,6 @@ public class NotificationType {
     private String name;
     private String type;
     private String description;
+    private boolean crucial;
     private boolean deleted;
 }

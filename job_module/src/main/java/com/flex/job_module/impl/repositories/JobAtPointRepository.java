@@ -23,7 +23,7 @@ public interface JobAtPointRepository extends JpaRepository<JobAtPoint, Integer>
     List<Integer> getDummyJobIds(@Param("date") LocalDate date);
 
     @Query("SELECT j.id FROM JobAtPoint j WHERE j.servicePoint.id=:servicePointId " +
-            "AND j.job.appointmentDate=:appointmentDate AND j.status < 2")
+            "AND j.job.appointmentDate=:appointmentDate")
     List<Integer> getPendingJobAtPointIdsByPoint(@Param("servicePointId") Integer servicePointId,
                                                  @Param("appointmentDate") LocalDate appointmentDate);
 
@@ -33,7 +33,7 @@ public interface JobAtPointRepository extends JpaRepository<JobAtPoint, Integer>
                                                  @Param("appointmentDate") LocalDate appointmentDate);
 
     @Query("SELECT j FROM JobAtPoint j WHERE j.servicePoint.id=:servicePointId " +
-            "AND j.job.appointmentDate=:appointmentDate AND j.status < 2 ORDER BY j.startTime")
+            "AND j.job.appointmentDate=:appointmentDate ORDER BY j.startTime")
     List<JobAtPoint> getPendingJobsAtPointByPoint(@Param("servicePointId") Integer servicePointId,
                                                  @Param("appointmentDate") LocalDate appointmentDate);
 

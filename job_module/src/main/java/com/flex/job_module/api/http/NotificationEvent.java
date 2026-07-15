@@ -1,0 +1,16 @@
+package com.flex.job_module.api.http;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class NotificationEvent {
+
+    private Integer userId;
+    private String notificationType;
+}

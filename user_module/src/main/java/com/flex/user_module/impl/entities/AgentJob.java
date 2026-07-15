@@ -48,6 +48,5 @@ public class AgentJob {
     private long expectedDuration;
     private long duration;
     private boolean durationMatched; // duration / expectedDuration * 100 > 75%
-    //todo may be has another property called servingStatus
     private int status;
 }

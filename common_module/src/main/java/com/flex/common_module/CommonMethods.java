@@ -40,4 +40,8 @@ public class CommonMethods {
     public static LocalDateTime getCurrentDateTime() {
         return LocalDateTime.now(ZoneId.of(ASIA_COLOMBO_TIME_ZONE));
     }
+
+    public static LocalTime secondsToLocalTime(long seconds) {
+        return LocalTime.ofSecondOfDay(seconds);
+    }
 }

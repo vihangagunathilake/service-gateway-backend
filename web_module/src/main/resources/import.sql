@@ -20,18 +20,22 @@ insert into permissions(permission, employee) value ('Assigned Clusters Manageme
 insert into permissions(permission, employee) value ('Employee Profile', true);
 insert into permissions(permission, employee) value ('Employee Jobs', true);
 
-insert into roles(deleted, restricted, role, service_provider_id) value (false, false, 'Employee', 1);
+# insert into roles(deleted, restricted, role, service_provider_id) value (false, false, 'Employee', 1);
+#
+# insert into role_permissions(permission_id, role_id) value (19, 2);
+# insert into role_permissions(permission_id, role_id) value (20, 2);
+# insert into role_permissions(permission_id, role_id) value (1, 2);
+#
+# insert into role_permission_access(add_permission, all_permission, assign_permission, delete_permission, get_all_permission, get_permission, update_permission, role_permission_id)
+#     VALUE (false, true, false, false, false, false, false, 19);
+# insert into role_permission_access(add_permission, all_permission, assign_permission, delete_permission, get_all_permission, get_permission, update_permission, role_permission_id)
+#     VALUE (false, true, false, false, false, false, false, 20);
+# insert into role_permission_access(add_permission, all_permission, assign_permission, delete_permission, get_all_permission, get_permission, update_permission, role_permission_id)
+#     VALUE (false, true, false, false, false, false, false, 21);
 
-insert into role_permissions(permission_id, role_id) value (19, 2);
-insert into role_permissions(permission_id, role_id) value (20, 2);
-insert into role_permissions(permission_id, role_id) value (1, 2);
-
-insert into role_permission_access(add_permission, all_permission, assign_permission, delete_permission, get_all_permission, get_permission, update_permission, role_permission_id)
-    VALUE (false, true, false, false, false, false, false, 19);
-insert into role_permission_access(add_permission, all_permission, assign_permission, delete_permission, get_all_permission, get_permission, update_permission, role_permission_id)
-    VALUE (false, true, false, false, false, false, false, 20);
-insert into role_permission_access(add_permission, all_permission, assign_permission, delete_permission, get_all_permission, get_permission, update_permission, role_permission_id)
-    VALUE (false, true, false, false, false, false, false, 21);
-
-insert into notification_type(deleted, type, name, description)
-    value (false, 'JOB_CREATED', 'Job Creation', 'This option notifies you every time a new job is created.');
+insert into notification_type(deleted, type, name, description, crucial)
+    value (false, 'GENERAL', 'General Notifications', 'This option enables general notification access.', false);
+insert into notification_type(deleted, type, name, description, crucial)
+    value (false, 'JOB_CREATED', 'Job Creation', 'This option notifies you every time a new job is created.', false);
+insert into notification_type(deleted, type, name, description, crucial)
+    value (false, 'NO_AGENT_FOR_JOB', 'No agent at point', 'This will notify the management when agent is arrived to service, but no agent is ready for the service.', true);

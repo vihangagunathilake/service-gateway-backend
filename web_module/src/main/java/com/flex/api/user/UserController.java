@@ -30,8 +30,6 @@ public class UserController {
         return userService.register(register, request);
     }
 
-    //todo create a service for customer registration - google OAuth
-
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Login login, HttpServletRequest request) {
         return userService.login(login, request);

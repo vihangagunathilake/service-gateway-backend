@@ -24,6 +24,9 @@ public interface JobRepository extends JpaRepository<Job, Integer> {
     List<JobDetailsV1> getJobDetailsLimitedData(@Param("centerId") Integer centerId,
                                                 @Param("appointmentDate") LocalDate appointmentDate);
 
+    @Query("SELECT count(j) FROM Job j WHERE j.serviceCenter.serviceProvider.id=:provider AND j.status=:status")
+    Integer getJobCountByStatusAndCenter(@Param("status")Integer status, @Param("provider")Integer provider);
+
     @Modifying
     @Transactional
     @Query(value = """

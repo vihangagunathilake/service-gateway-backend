@@ -5,9 +5,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 
 public interface NotificationService {
-    ResponseEntity<?> notifications(HttpServletRequest request);
+    // capture the kafka message and show the notification count on bell icon
+    ResponseEntity<?> notify(HttpServletRequest request);
 
-    ResponseEntity<?> userNotifications(Pagination pagination, HttpServletRequest request);
+    ResponseEntity<?> notifyNoAgent(HttpServletRequest request);
 
-    ResponseEntity<?> markAsRead(Integer notificationId, HttpServletRequest request);
+    // to disappear notification count when click on bell icon
+    ResponseEntity<?> notified(HttpServletRequest request);
+
+    ResponseEntity<?> timeoutJobs(HttpServletRequest request);
 }

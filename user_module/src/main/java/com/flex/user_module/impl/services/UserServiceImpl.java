@@ -8,6 +8,8 @@ import com.flex.common_module.security.http.response.UserClaims;
 import com.flex.common_module.security.utils.CryptoUtil;
 import com.flex.common_module.security.utils.HashUtil;
 import com.flex.common_module.security.utils.JwtUtil;
+import com.flex.job_module.api.http.DTO.JobAtPointDetails;
+import com.flex.job_module.impl.repositories.JobTrackRepository;
 import com.flex.user_module.api.http.responses.*;
 import com.flex.job_module.constants.JobStatus;
 import com.flex.job_module.impl.entities.Customer;
@@ -87,7 +89,7 @@ public class UserServiceImpl implements UserService {
     private final ClusterRepository clusterRepository;
     private final JobAtPointRepository jobAtPointRepository;
     private final AgentJobRepository agentJobRepository;
-
+    private final JobTrackRepository jobTrackRepository;
 
     @Override
     @Transactional
@@ -146,12 +148,11 @@ public class UserServiceImpl implements UserService {
                 p -> RolePermission.builder().role(admin).permission(p).build()).collect(Collectors.toList());
 
         List<RolePermissionAccess> rolePermissionAccesses = rolePermissions.stream().map(
-                rolePermission ->
-                        RolePermissionAccess.builder()
-                                .all_permission(true)
-                                .rolePermission(rolePermission)
-                                .build()
-        ).toList();
+                rolePermission -> RolePermissionAccess.builder()
+                        .all_permission(true)
+                        .rolePermission(rolePermission)
+                        .build())
+                .toList();
 
         List<Permission> employeePermissions = permissionRepository.getAllByEmployeeIsTrue();
 
@@ -177,12 +178,11 @@ public class UserServiceImpl implements UserService {
                 p -> RolePermission.builder().role(employee).permission(p).build()).toList();
 
         List<RolePermissionAccess> employeeRolePermissionAccesses = employeeRolePermission.stream().map(
-                rolePermission ->
-                        RolePermissionAccess.builder()
-                                .all_permission(true)
-                                .rolePermission(rolePermission)
-                                .build()
-        ).toList();
+                rolePermission -> RolePermissionAccess.builder()
+                        .all_permission(true)
+                        .rolePermission(rolePermission)
+                        .build())
+                .toList();
 
         // create user entity for admin
         User user = User.builder()
@@ -332,8 +332,7 @@ public class UserServiceImpl implements UserService {
         if (changePassword.isForgot()) {
 
             List<UserPasswordToken> resetPasswordTokens = userPasswordTokenRepository.getNonExpiredUserPasswordTokens(
-                    user.getId(), changePassword.getEmailString(), CommonMethods.getCurrentDateTime()
-            );
+                    user.getId(), changePassword.getEmailString(), CommonMethods.getCurrentDateTime());
 
             if (resetPasswordTokens.isEmpty()) {
                 return CONFLICT("Reset Password Tokens not found");
@@ -356,8 +355,7 @@ public class UserServiceImpl implements UserService {
         } else {
             UserPasswordToken userPasswordToken = userPasswordTokenRepository.findTokenByUserId(
                     user.getId(),
-                    changePassword.getEmailString()
-            );
+                    changePassword.getEmailString());
 
             if (userPasswordToken == null) {
                 return CONFLICT("This email does not registered");
@@ -376,7 +374,8 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public ResponseEntity<?> forgetPassword(ChangePassword changePassword, HttpServletRequest request) throws MessagingException {
+    public ResponseEntity<?> forgetPassword(ChangePassword changePassword, HttpServletRequest request)
+            throws MessagingException {
         log.info(request.getRequestURI());
 
         User user = userRepository.findByEmailAndDeletedIsFalse(changePassword.getEmail());
@@ -386,8 +385,7 @@ public class UserServiceImpl implements UserService {
         }
 
         List<UserPasswordToken> resetPasswordTokens = userPasswordTokenRepository.getNonExpiredUserPasswordTokens(
-                user.getId(), changePassword.getNewPassword(), CommonMethods.getCurrentDateTime()
-        );
+                user.getId(), changePassword.getNewPassword(), CommonMethods.getCurrentDateTime());
 
         if (!resetPasswordTokens.isEmpty()) {
             return SUCCESS("Reset token already sent. Please check your email");
@@ -446,7 +444,8 @@ public class UserServiceImpl implements UserService {
                     return CONFLICT("Please end the job before leaving");
                 }
 
-                agentLogin.setLogoutTime(CommonMethods.getCurrentDateTime());
+                agentLogin.setLogoutDate(CommonMethods.getCurrentDate());
+                agentLogin.setLogoutTime(CommonMethods.getCurrentTime());
 
                 agentLoginRepository.save(agentLogin);
 
@@ -767,11 +766,11 @@ public class UserServiceImpl implements UserService {
 
         // adding role notification is happening in notification_module
         // this is added to prevent circular dependency
-//        publisher.publishEvent(
-//                new UserCreatedEvent(
-//                        user
-//                )
-//        );
+        // publisher.publishEvent(
+        // new UserCreatedEvent(
+        // user
+        // )
+        // );
 
         UserDetails userDetails = UserDetails.builder()
                 .user(user)
@@ -1007,11 +1006,11 @@ public class UserServiceImpl implements UserService {
                 && roleRepository.existsByIdAndDeletedIsFalse(updateUser.getRoleId())) {
             existingUser.setRole(new Role(updateUser.getRoleId()));
 
-//            publisher.publishEvent(
-//                    new UserUpdatedEvent(
-//                            existingUser
-//                    )
-//            );
+            // publisher.publishEvent(
+            // new UserUpdatedEvent(
+            // existingUser
+            // )
+            // );
         }
 
         if (existingUser.getServiceCenter() != null) {
@@ -1243,77 +1242,79 @@ public class UserServiceImpl implements UserService {
             }
         }
 
-        List<JobAtPoint> jobsAtPoints = jobAtPointRepository.findAllByJobId(jobId);
+        List<JobAtPointDetails> jobsAtPoints = jobAtPointRepository.findJobAtPointDetails(jobId);
 
         List<SubJobDetails> subJobDetailsList = new ArrayList<>();
 
-        boolean inServing = false;
         boolean timeoutJob = false;
-        List<Integer> completedJobIds = new ArrayList<>();
-        int totalPrice = 0;
+        boolean inServing = false;
+        boolean completed = false;
         int downPayment = 0;
-        String currentPoint = null;
-        String customerArrivalTime = null;
+
+        List<String> pointNames = new ArrayList<>();
+
+        String jobStatus = "Pending";
 
         if (!jobsAtPoints.isEmpty()) {
-            for (JobAtPoint jobAtPoint : jobsAtPoints) {
+            for (JobAtPointDetails jobAtPoint : jobsAtPoints) {
 
-                customerArrivalTime = jobAtPoint.getCustomerArrivedTime() != null
-                        ? CommonMethods.timeFormat(jobAtPoint.getCustomerArrivedTime()) : null;
+                if (!pointNames.contains(jobAtPoint.getPointName())) {
+                    pointNames.add(jobAtPoint.getPointName());
+                }
 
-                SubJobDetails jobDetail = SubJobDetails.builder()
-                        .service(jobAtPoint.getService().getName())
-                        .pointName(jobAtPoint.getServicePoint().getName())
-                        .startTime(CommonMethods.timeFormat(jobAtPoint.getStartTime()))
-                        .endTime(CommonMethods.timeFormat(jobAtPoint.getEndTime()))
-                        .estimatedEndTime(true)
-                        .status(JobStatus.PENDING)
-                        .build();
-
-                AgentJob agentJob = agentJobRepository.findByJobAtPoint_id(jobAtPoint.getId());
-
-
-                if (jobAtPoint.getStatus() == JobStatus.IN_SERVICE) {
-                    jobDetail.setStatus(JobStatus.IN_SERVICE);
+                if (job.getStatus() == JobStatus.TRANSFER) {
+                    jobStatus = "Transferred";
+                } else if (jobAtPoint.getStatus() == JobStatus.IN_SERVICE) {
                     inServing = true;
-                    currentPoint = jobAtPoint.getServicePoint().getName();
-
-                    jobDetail.setActualStartTime(CommonMethods.timeFormat(agentJob.getStartTime()));
-                    jobDetail.setAgent(agentJob.getAgent().getFName() + " " + agentJob.getAgent().getLName());
-
+                } else if (jobAtPoint.getStatus() == JobStatus.PENDING && completed) {
+                    timeoutJob = true;
                 } else {
                     if (jobAtPoint.getStatus() == JobStatus.COMPLETED) {
-                        completedJobIds.add(jobAtPoint.getId());
-                        jobDetail.setStatus(JobStatus.COMPLETED);
-                        jobDetail.setCompleted(true);
-                        jobDetail.setActualEndTime(CommonMethods.timeFormat(jobAtPoint.getActualEndTime()));
-                        jobDetail.setEstimatedEndTime(false);
-                        jobDetail.setActualStartTime(CommonMethods.timeFormat(agentJob.getStartTime()));
-                        jobDetail.setAgent(agentJob.getAgent().getFName() + " " + agentJob.getAgent().getLName());
-                        jobDetail.setActualEndTime(CommonMethods.timeFormat(agentJob.getEndTime()));
-                    } else if (jobAtPoint.getStatus() == JobStatus.TIMEOUT) {
-                        jobDetail.setStatus(JobStatus.TIMEOUT);
+                        completed = true;
+                    }
+
+                    if (jobAtPoint.getStatus() == JobStatus.TIMEOUT) {
                         timeoutJob = true;
                     }
                 }
 
-                subJobDetailsList.add(jobDetail);
+                downPayment = downPayment + jobAtPoint.getDownPayment();
 
-                totalPrice = totalPrice + jobAtPoint.getService().getTotalPrice();
-                downPayment = downPayment + jobAtPoint.getService().getDownPrice();
+                List<String> services = jobAtPoint.getServices() == null
+                        ? Collections.emptyList()
+                        : Arrays.stream(jobAtPoint.getServices().split(",\\s*"))
+                                .toList();
+
+                SubJobDetails.PointJobDetails pointJobDetails = SubJobDetails.PointJobDetails.builder()
+                        .services(services)
+                        .startTime(CommonMethods.timeFormat(jobAtPoint.getExpectedStartTime().toString()))
+                        .endTime(CommonMethods.timeFormat(jobAtPoint.getExpectedEndTime().toString()))
+                        .actualStartTime(jobAtPoint.getStartedTime() != null
+                                ? CommonMethods.timeFormat(jobAtPoint.getStartedTime().toString())
+                                : null)
+                        .actualEndTime(jobAtPoint.getEndTime() != null
+                                ? CommonMethods.timeFormat(jobAtPoint.getEndTime().toString())
+                                : null)
+                        .agent(jobAtPoint.getAgent() != null ? jobAtPoint.getAgent() : null)
+                        .status(jobAtPoint.getStatus())
+                        .build();
+
+                SubJobDetails subJobDetail = SubJobDetails.builder()
+                        .pointName(jobAtPoint.getPointName())
+                        .pointJobDetails(pointJobDetails)
+                        .build();
+
+                subJobDetailsList.add(subJobDetail);
 
             }
         }
-
-        String jobStatus = "Pending";
 
         if (inServing) {
             jobStatus = "Serving";
         } else if (timeoutJob) {
             jobStatus = "Timeout";
-        }
-        else {
-            if (completedJobIds.size() == jobsAtPoints.size()) {
+        } else {
+            if (completed) {
                 jobStatus = "Completed";
             }
         }
@@ -1324,20 +1325,23 @@ public class UserServiceImpl implements UserService {
                 .id(job.getId())
                 .customer(customer.getCustomer())
                 .customerName(customer.getName())
-                .pointName(currentPoint)
+                .pointName(pointNames)
                 .customerEmail(null)
                 .customerPhone(customer.getPhone())
                 .serviceName(cluster != null ? cluster.getName() : "Custom Service")
                 .centerName(job.getServiceCenter().getName())
                 .status(jobStatus)
-                .totalAmount((double) totalPrice)
                 .paidAmount((double) downPayment)
                 .serviceFee(job.getServiceCenter().getServiceProvider().getServiceFee())
                 .createdAt(job.getCreatedDate() + " at " + job.getCreatedTime().format(timeFormatter))
                 .appointmentMethod(userServiceHelper.jobType(job.getJobType()))
+                .appointmentDate(job.getAppointmentDate().toString())
+                .appointmentTime(
+                        job.getAppointmentTime() != null ? CommonMethods.timeFormat(job.getAppointmentTime().toString())
+                                : " ")
                 .description(job.getDescription())
-                .customerArrivedTime(customerArrivalTime)
-                .timeline(subJobDetailsList)
+                .plan(subJobDetailsList)
+                .timeline(jobTrackRepository.getJobTrackByJobId(job.getId()))
                 .verifiedJob(job.isPaymentVerified())
                 .build();
 

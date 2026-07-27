@@ -12,6 +12,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.util.Set;
 
 /**
  * $DESC
@@ -53,11 +56,15 @@ public class SPServiceHelper {
 
             String extension = FilenameUtils.getExtension(file.getOriginalFilename());
 
-            Files.deleteIfExists(Paths.get(imageFolder + userId.toString() +
-                    "." + extension));
+            Path imagePath = imageFolder.resolve(userId + "." + extension);
 
-            Files.copy(file.getInputStream(), imageFolder.resolve(userId
-                    + "." + extension), StandardCopyOption.REPLACE_EXISTING);
+            Files.deleteIfExists(imagePath);
+            Files.copy(file.getInputStream(), imagePath, StandardCopyOption.REPLACE_EXISTING);
+
+            // Set file permissions to rw-r--r-- (644)
+            Set<PosixFilePermission> permissions =
+                    PosixFilePermissions.fromString("rw-r--r--");
+            Files.setPosixFilePermissions(imagePath, permissions);
 
             String profileImageUrl = imageUrl + providerProfile;
 
@@ -76,11 +83,15 @@ public class SPServiceHelper {
 
             String extension = FilenameUtils.getExtension(file.getOriginalFilename());
 
-            Files.deleteIfExists(Paths.get(imageFolder + userId.toString() +
-                    "." + extension));
+            Path imagePath = imageFolder.resolve(userId + "." + extension);
 
-            Files.copy(file.getInputStream(), imageFolder.resolve(userId
-                    + "." + extension), StandardCopyOption.REPLACE_EXISTING);
+            Files.deleteIfExists(imagePath);
+            Files.copy(file.getInputStream(), imagePath, StandardCopyOption.REPLACE_EXISTING);
+
+            // Set file permissions to rw-r--r-- (644)
+            Set<PosixFilePermission> permissions =
+                    PosixFilePermissions.fromString("rw-r--r--");
+            Files.setPosixFilePermissions(imagePath, permissions);
 
             String profileImageUrl = imageUrl + providerCover;
 

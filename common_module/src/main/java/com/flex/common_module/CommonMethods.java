@@ -6,14 +6,14 @@ import java.time.format.DateTimeFormatter;
 import static com.flex.common_module.constants.AppConstants.ASIA_COLOMBO_TIME_ZONE;
 
 public class CommonMethods {
-    public static Duration getDuration(LocalTime start, LocalTime end) {
+    public static long getDuration(LocalTime start, LocalTime end) {
         Duration duration = Duration.between(start, end);
 
         if (duration.isNegative()) {
             duration = duration.plusHours(24);
         }
 
-        return duration;
+        return duration.getSeconds();
     }
 
     public static String timeFormat(LocalTime time) {

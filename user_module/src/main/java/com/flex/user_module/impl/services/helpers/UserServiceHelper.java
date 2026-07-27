@@ -14,10 +14,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -101,6 +103,7 @@ public class UserServiceHelper {
 
     public String saveUserProfileImage(MultipartFile file, Integer userId) throws IOException {
         if (file != null && !file.isEmpty()) {
+
             Path imageFolder = Paths.get(mainImageStorage + userProfile);
 
             if (!Files.exists(imageFolder)) {
@@ -109,21 +112,33 @@ public class UserServiceHelper {
 
             String extension = FilenameUtils.getExtension(file.getOriginalFilename());
 
-            Files.deleteIfExists(Paths.get(imageFolder + userId.toString() +
-                    "." + extension));
+            Path imagePath = imageFolder.resolve(userId + "." + extension);
 
-            Files.copy(file.getInputStream(), imageFolder.resolve(userId
-                    + "." + extension), StandardCopyOption.REPLACE_EXISTING);
+            Files.deleteIfExists(imagePath);
+
+            Files.copy(
+                    file.getInputStream(),
+                    imagePath,
+                    StandardCopyOption.REPLACE_EXISTING
+            );
+
+            // Set permission: rw-r--r-- (644)
+            Files.setPosixFilePermissions(
+                    imagePath,
+                    PosixFilePermissions.fromString("rw-r--r--")
+            );
 
             String profileImageUrl = imageUrl + userProfile;
 
             return setImageUrl(profileImageUrl, userId, extension);
         }
+
         return null;
     }
 
     public String saveUserCoverImage(MultipartFile file, Integer userId) throws IOException {
         if (file != null && !file.isEmpty()) {
+
             Path imageFolder = Paths.get(mainImageStorage + userCover);
 
             if (!Files.exists(imageFolder)) {
@@ -132,16 +147,29 @@ public class UserServiceHelper {
 
             String extension = FilenameUtils.getExtension(file.getOriginalFilename());
 
-            Files.deleteIfExists(Paths.get(imageFolder + userId.toString() +
-                    "." + extension));
+            Path imagePath = imageFolder.resolve(userId + "." + extension);
 
-            Files.copy(file.getInputStream(), imageFolder.resolve(userId
-                    + "." + extension), StandardCopyOption.REPLACE_EXISTING);
+            Files.deleteIfExists(imagePath);
 
-            String profileImageUrl = imageUrl + userCover;
+            try (InputStream inputStream = file.getInputStream()) {
+                Files.copy(
+                        inputStream,
+                        imagePath,
+                        StandardCopyOption.REPLACE_EXISTING
+                );
+            }
 
-            return setImageUrl(profileImageUrl, userId, extension);
+            // Set permission: rw-r--r-- (644) so nginx can read the image
+            Files.setPosixFilePermissions(
+                    imagePath,
+                    PosixFilePermissions.fromString("rw-r--r--")
+            );
+
+            String coverImageUrl = imageUrl + userCover;
+
+            return setImageUrl(coverImageUrl, userId, extension);
         }
+
         return null;
     }
 

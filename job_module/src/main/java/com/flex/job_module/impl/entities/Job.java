@@ -37,6 +37,9 @@ public class Job {
     @ManyToOne
     @JoinColumn(name = "service_center_id")
     private ServiceCenter serviceCenter;
+    @ManyToOne
+    @JoinColumn(name = "transfered_job_id")
+    private Job transferedJob;
 
     // times
     @JsonFormat(pattern = "HH:mm:ss", timezone = "Asia/Colombo")

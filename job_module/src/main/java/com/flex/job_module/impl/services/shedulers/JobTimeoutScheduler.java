@@ -1,5 +1,6 @@
 package com.flex.job_module.impl.services.shedulers;
 
+import com.flex.job_module.events.JobTimedOutEvent;
 import com.flex.job_module.impl.entities.Customer;
 import com.flex.job_module.impl.entities.Job;
 import com.flex.job_module.impl.entities.JobAtPoint;
@@ -8,6 +9,7 @@ import com.flex.job_module.impl.repositories.JobAtPointRepository;
 import com.flex.job_module.impl.repositories.JobRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +27,8 @@ public class JobTimeoutScheduler {
     private final JobRepository jobRepository;
     private final CustomerRepository customerRepository;
 
+    private final ApplicationEventPublisher eventPublisher;
+
     @Scheduled(fixedDelay = 60000)
     @Transactional
     public void timeoutJobs() {
@@ -32,11 +36,20 @@ public class JobTimeoutScheduler {
         int updatedJobAtPoints = jobAtPointRepository.timeoutJobAtPoints();
 
         if (updatedJobAtPoints > 0) {
-            int updatedJobs = jobRepository.timeoutJobs();
 
-            log.info("Timed out {} JobAtPoint(s) and {} Job(s).",
-                    updatedJobAtPoints,
-                    updatedJobs);
+            List<Integer> jobIds = jobRepository.findTimeoutJobIds();
+
+            if (!jobIds.isEmpty()) {
+                jobRepository.timeoutJobs(jobIds);
+
+                log.info("Timed out {} JobAtPoint(s) and {} Job(s). Job IDs: {}",
+                        updatedJobAtPoints,
+                        jobIds.size(),
+                        jobIds);
+
+                // publish events here if needed
+                jobIds.forEach(id -> eventPublisher.publishEvent(new JobTimedOutEvent(id)));
+            }
         }
     }
 

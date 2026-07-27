@@ -36,4 +36,10 @@ public class AvailableService {
         this.servicePointId = servicePointId;
         this.serviceId = serviceId;
     }
+
+    public AvailableService(Integer id, ServicePoint servicePoint, Service service) {
+        this.id = id;
+        this.servicePoint = servicePoint;
+        this.service = service;
+    }
 }

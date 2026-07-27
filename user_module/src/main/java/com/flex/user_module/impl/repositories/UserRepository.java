@@ -1,5 +1,6 @@
 package com.flex.user_module.impl.repositories;
 
+import com.flex.service_module.impl.entities.ServiceProvider;
 import com.flex.user_module.api.DTO.CenterUsers;
 import com.flex.user_module.api.DTO.UserDropdown;
 import com.flex.user_module.api.DTO.UserPermissionAccessView;
@@ -28,6 +29,11 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     User findByEmailAndDeletedIsFalse(String email);
 
     User findByIdAndDeletedIsFalse(Integer id);
+
+    @Query("SELECT count(u) FROM User u WHERE u.serviceProvider.id=:spId " +
+            "AND u.serviceCenter.deleted = false AND u.userType=:userType AND u.deleted = false")
+    int getCountByServiceProviderAndDeletedIsFalse(@Param("spId")Integer serviceProviderId,
+                                                   @Param("userType") Integer userType);
 
     @Query(
             "SELECT " +

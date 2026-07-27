@@ -2,7 +2,9 @@ package com.flex.api.job;
 
 import com.flex.job_module.api.http.requests.PointJobs;
 import com.flex.job_module.api.http.requests.PrepareJob;
+import com.flex.job_module.api.http.requests.TransferJob;
 import com.flex.job_module.api.services.JobService;
+import com.flex.job_module.impl.services.algorithm.PrepareJobSubMethods;
 import com.flex.service_module.api.http.requests.AddCluster;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +28,7 @@ public class JobController {
     @PostMapping("/prepare")
     @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PT)")
     public ResponseEntity<?> prepareJob(@RequestBody PrepareJob job, HttpServletRequest request) {
-        return jobService.prepareJob(job, request);
+        return jobService.prepareJobV2(job, request);
     }
 
     @PutMapping("/{jobId}/verify")
@@ -57,5 +59,11 @@ public class JobController {
     @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PT)")
     public ResponseEntity<?> jobSchedule(@RequestBody PointJobs pointJobs, HttpServletRequest request) {
         return jobService.pointWiseJobs(pointJobs, request);
+    }
+
+    @PostMapping("/transfer-jobs")
+    @PreAuthorize("@securityService.hasAnyAccess(T(com.flex.user_module.constants.PermissionConstant).PT)")
+    public ResponseEntity<?> transferJob(@RequestBody TransferJob transferJob, HttpServletRequest request) {
+        return jobService.transferJob(transferJob, request);
     }
 }

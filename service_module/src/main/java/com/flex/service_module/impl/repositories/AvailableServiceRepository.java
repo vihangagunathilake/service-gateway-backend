@@ -14,7 +14,11 @@ public interface AvailableServiceRepository extends JpaRepository<AvailableServi
 
     @Query("SELECT new AvailableService(s.id, s.servicePoint.id, s.service.id) FROM AvailableService s " +
             "WHERE s.service.id=:serviceId AND s.servicePoint.id=:pointId")
-    AvailableService availableService(@Param("serviceId") Integer serviceId, @Param("pointId") Integer pointId);
+    AvailableService availableServiceV1(@Param("serviceId") Integer serviceId, @Param("pointId") Integer pointId);
+
+    @Query("SELECT new AvailableService(s.id, s.servicePoint, s.service) FROM AvailableService s " +
+            "WHERE s.service.id=:serviceId AND s.servicePoint.id=:pointId")
+    AvailableService availableServiceV2(@Param("serviceId") Integer serviceId, @Param("pointId") Integer pointId);
 
     @Query("SELECT a FROM AvailableService a WHERE a.servicePoint.id=:pointId ORDER BY a.service.orderNumber asc")
     List<AvailableService> findAllByServicePointId(@Param("pointId") Integer pointId);
@@ -34,6 +38,9 @@ public interface AvailableServiceRepository extends JpaRepository<AvailableServi
 
     @Query("SELECT a.servicePoint.id FROM AvailableService a WHERE a.service.id=:serviceId AND a.servicePoint.deleted = false")
     List<Integer> pointsByService(@Param("serviceId") Integer serviceId);
+
+    @Query("SELECT a.service FROM AvailableService a WHERE a.servicePoint.id=:pointId and a.service.id in :servicesIds")
+    List<Service> getAvailableServicesIds(@Param("pointId")Integer pointId, @Param("servicesIds") List<Integer> servicesIds);
 
     @Query("""
        SELECT MIN(s.serviceTime)

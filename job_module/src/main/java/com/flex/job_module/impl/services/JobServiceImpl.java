@@ -1,5 +1,6 @@
 package com.flex.job_module.impl.services;
 
+import com.flex.common_module.CommonMethods;
 import com.flex.common_module.constants.Colors;
 import com.flex.common_module.security.http.response.UserClaims;
 import com.flex.common_module.security.utils.JwtUtil;
@@ -8,9 +9,11 @@ import com.flex.job_module.api.http.DTO.JobTimelineProjection;
 import com.flex.job_module.api.http.DTO.MinimumServiceTimePoint;
 import com.flex.job_module.api.http.requests.PointJobs;
 import com.flex.job_module.api.http.requests.PrepareJob;
+import com.flex.job_module.api.http.requests.TransferJob;
 import com.flex.job_module.api.http.responses.*;
 import com.flex.job_module.api.services.JobService;
 import com.flex.job_module.constants.JobStatus;
+import com.flex.job_module.constants.JobTrackStatus;
 import com.flex.job_module.constants.JobTypes;
 import com.flex.job_module.events.NoAgentInPointEvent;
 import com.flex.job_module.impl.entities.Customer;
@@ -163,6 +166,9 @@ public class JobServiceImpl implements JobService {
                     Comparator.comparing(JobAtPoint::getStartTime)
             );
 
+            // this use to calculate down payment and save in job entity
+            int totalDownPayment = 0;
+
             //this is useful when find the free slots among other jobs.
             long totalServiceTime = centerClusterServices.stream()
                     .filter(s -> s.getServiceTime() != null)
@@ -203,7 +209,7 @@ public class JobServiceImpl implements JobService {
                     log.info("{}point: {}{}", Colors.YELLOW, servicePoint.getName(), Colors.RESET);
                     //must have service in service point
                     AvailableService availableService = availableServiceRepository
-                            .availableService(centerClusterService.getId(), servicePoint.getId());
+                            .availableServiceV1(centerClusterService.getId(), servicePoint.getId());
                     //if have service in service point
                     if (availableService != null) {
 
@@ -233,6 +239,8 @@ public class JobServiceImpl implements JobService {
                                 JobAtPoint createJobAtPoint = jobServiceHelper
                                         .createJobAtPoint(servicePoint, centerClusterService, job,
                                                 nextStartTime, minimumEndTimePoint, minimumEndTimeOfPoint,true);
+
+                                totalDownPayment = totalDownPayment + centerClusterService.getDownPrice();
 
                                 if (createJobAtPoint != null) {
                                     log.info("point: {}", servicePoint.getName() + " ✅");
@@ -304,6 +312,8 @@ public class JobServiceImpl implements JobService {
                             JobAtPoint createJobAtPoint = jobServiceHelper
                                     .createJobAtPoint(servicePoint, centerClusterService, job,
                                             nextStartTime, minimumEndTimePoint, minimumEndTimeOfPoint, true);
+
+                            totalDownPayment = totalDownPayment + centerClusterService.getDownPrice();
 
                             if (createJobAtPoint != null) {
                                 log.info("point: {}", servicePoint.getName() + " ✅");
@@ -513,6 +523,8 @@ public class JobServiceImpl implements JobService {
                             .createJobAtPoint(suitablePoint, centerClusterService, job,
                                     bestTime, minimumEndTimePoint, minimumEndTimeOfPoint, true);
 
+                    totalDownPayment = totalDownPayment + centerClusterService.getDownPrice();
+
                     if (createJobAtPoint != null) {
                         log.info("point: {}", suitablePoint.getName() + " ✅");
                         log.info("job start time: {}" ,bestTime);
@@ -543,6 +555,8 @@ public class JobServiceImpl implements JobService {
                 log.info("appointmentTime: {}", appointmentTime);
             }
 
+            job.setDownPayment(totalDownPayment);
+
             job.setAppointmentTime(appointmentTime);
             jobRepository.save(job);
 
@@ -571,6 +585,7 @@ public class JobServiceImpl implements JobService {
             // find all services available service points
             List<ServicePoint> points = servicePointRepository
                     .findServicePointsHavingAllServices(prepareJob.getServicesIds(),
+                            prepareJob.getServiceCenterId(),
                             prepareJob.getServicesIds().size());
 
             Set<JobAtPoint> jobsAtPoint = new TreeSet<>(
@@ -708,6 +723,8 @@ public class JobServiceImpl implements JobService {
                         .mapToLong(s -> s.getServiceTime().toSecondOfDay())
                         .sum();
 
+                int totalDownPayment = 0;
+
                 for (com.flex.service_module.impl.entities.Service service : services) {
                     log.info(" ");
                     log.info("{}service: {}{}", Colors.YELLOW, service.getName(), Colors.RESET);
@@ -721,7 +738,7 @@ public class JobServiceImpl implements JobService {
 
                         log.info("{}service point: {}{}", Colors.YELLOW, servicePoint.getName(), Colors.RESET);
                         AvailableService availableService = availableServiceRepository
-                                .availableService(service.getId(), servicePoint.getId());
+                                .availableServiceV1(service.getId(), servicePoint.getId());
 
                         //has service in this point?
                         if (availableService != null) {
@@ -752,6 +769,8 @@ public class JobServiceImpl implements JobService {
                                     JobAtPoint createJobAtPoint = jobServiceHelper
                                             .createJobAtPoint(servicePoint, service, job,
                                                     nextStartTime, minimumEndTimePoint, minimumEndTimeOfPoint, true);
+
+                                    totalDownPayment = totalDownPayment + service.getDownPrice();
 
                                     if (createJobAtPoint != null) {
                                         log.info("point: {}", servicePoint.getName() + " ✅");
@@ -1003,6 +1022,8 @@ public class JobServiceImpl implements JobService {
                                 .createJobAtPoint(suitablePoint, service, job,
                                         bestTime, minimumEndTimePoint, minimumEndTimeOfPoint, true);
 
+                        totalDownPayment = totalDownPayment + service.getDownPrice();
+
                         if (createJobAtPoint != null) {
                             log.info("point: {}", suitablePoint.getName() + " ✅");
                             log.info("service time: {}", service.getServiceTime());
@@ -1029,6 +1050,7 @@ public class JobServiceImpl implements JobService {
                 }
 
                 job.setAppointmentTime(minimumStartTime);
+                job.setDownPayment(totalDownPayment);
                 jobRepository.save(job);
 
                 //custom services completed
@@ -1039,6 +1061,132 @@ public class JobServiceImpl implements JobService {
                         .appointmentTime(minimumStartTime != null ? minimumStartTime.toString() : null)
                         .jobsAtPoint(jobsAtPoint).build());
             }
+        }
+    }
+
+    @Override
+    public ResponseEntity<?> prepareJobV2(PrepareJob prepareJob, HttpServletRequest request) {
+        // * support current time job creation
+        log.info(request.getRequestURI());
+
+        if (prepareJob.getAppointmentDate() == null) {
+            return BAD_REQUEST("Appointment date not defined");
+        }
+
+        ServiceCenter serviceCenter = serviceCenterRepository.findByIdAndDeletedIsFalse(prepareJob.getServiceCenterId());
+
+        if (serviceCenter == null) {
+            return CONFLICT("Service center not found");
+        }
+
+        List<ServicePoint> servicePointList = servicePointRepository.servicePointsByCenter(serviceCenter.getId());
+
+        if (servicePointList.isEmpty()) {
+            return CONFLICT("Service points not found");
+        }
+
+        Customer customer = customerRepository.findByPhone(prepareJob.getPhone());
+
+        if (customer == null) {
+            customer = Customer.builder()
+                    .customer(prepareJob.getCustomer())
+                    .phone(prepareJob.getPhone())
+                    .dummy(true)
+                    .build();
+        }
+
+        Job hasJobForThisCustomer = jobRepository
+                .jobForCustomer(customer.getId());
+
+        if (hasJobForThisCustomer != null) {
+            return CONFLICT("Already have job for this customer");
+        }
+
+        customerRepository.save(customer);
+
+        Job job = Job.builder()
+                .customer(customer)
+                .serviceCenter(serviceCenter)
+                .appointmentDate(prepareJob.getAppointmentDate())
+                .status(JobStatus.PENDING)
+                .jobType(JobTypes.WEB)
+                .description(prepareJob.getNotes())
+                .createdDate(LocalDate.now())
+                .createdTime(LocalTime.now())
+                .dummy(true)
+                .build();
+
+        jobRepository.save(job);
+
+        //this is use after created the jobAtPoint, so this is equals to new jobAtPoint end time.
+        // then this going to be a start time for the next jobAtPoint
+        LocalTime nextStartTime = prepareJobSubMethods.nextStartTime(serviceCenter.getOpenTime(), prepareJob.getAppointmentDate());
+
+        if (prepareJob.getCenterClusterId() != null) {
+            // cluster services
+            CenterCluster centerCluster = centerClusterRepository.getCenterClusterById(prepareJob.getCenterClusterId());
+
+            if (centerCluster == null) {
+                jobServiceHelper.clearDummyData(customer.getId(), job.getId());
+                return CONFLICT("Cluster not found");
+            }
+
+            job.setClusterId(centerCluster.getCluster().getId());
+
+            // find services from center cluster
+            List<com.flex.service_module.impl.entities.Service> centerClusterServices = ccsRepository
+                    .getServicesByCenterClusterId(prepareJob.getCenterClusterId());
+
+            if (centerClusterServices.isEmpty()) {
+                jobServiceHelper.clearDummyData(customer.getId(), job.getId());
+                return CONFLICT("Services not found for cluster");
+            }
+
+            PreparedJobV2 preparedJobV2 = prepareJobSubMethods
+                    .loopServicesAndScheduleJobs(centerClusterServices, servicePointList, job,
+                    customer, nextStartTime, prepareJob.getAppointmentDate());
+
+
+            if (preparedJobV2 == null) {
+                return CONFLICT("No available slots for this service center for " +  prepareJob.getAppointmentDate());
+            }
+
+            String note = "This appointment made by "
+                    + customer.getCustomer()
+                    + " to "
+                    + job.getAppointmentDate()
+                    + " in "
+                    + job.getServiceCenter().getName();
+
+            jobServiceHelper.markTheTrack(job.getId(), JobTrackStatus.PREPARED, JobTrackStatus.PREPARED_S, note);
+
+            return DATA(preparedJobV2);
+
+        } else {
+
+            // custom services
+            List<com.flex.service_module.impl.entities.Service> services = servicesRepository
+                    .getServicesByIds(prepareJob.getServicesIds());
+
+            // check points which all customer services are available
+            List<ServicePoint> allServicesAvailablePoints = servicePointRepository
+                    .findServicePointsHavingAllServices(prepareJob.getServicesIds(),
+                            prepareJob.getServiceCenterId(),
+                            prepareJob.getServicesIds().size());
+
+            boolean hasAllAvailablePoints = !allServicesAvailablePoints.isEmpty();
+
+            PreparedJobV2 preparedJobV2 = prepareJobSubMethods.loopServicesAndScheduleJobs(services,
+                    hasAllAvailablePoints ? allServicesAvailablePoints : servicePointList,
+                    job,
+                    customer, nextStartTime, prepareJob.getAppointmentDate());
+
+            if (preparedJobV2 == null) {
+                return CONFLICT("No available slots for this service center for " +  prepareJob.getAppointmentDate());
+            }
+
+            return DATA(preparedJobV2);
+
         }
     }
 
@@ -1059,6 +1207,44 @@ public class JobServiceImpl implements JobService {
             return CONFLICT("Job not found");
         }
 
+        boolean thisIsTransferredJob = job.getTransferedJob() != null;
+
+        if (thisIsTransferredJob) {
+            Job transferedJob = job.getTransferedJob();
+
+            transferedJob.setStatus(JobStatus.TRANSFER);
+
+            jobRepository.save(transferedJob);
+
+            List<JobAtPoint> transferredJobsAtPoint = jobAtPointRepository.findAllByJobId(transferedJob.getId());
+
+            List<JobAtPoint> updatedTransferredJobs = transferredJobsAtPoint.stream()
+                    .peek(e -> e.setStatus(JobStatus.TRANSFER))
+                    .toList();
+
+            jobAtPointRepository.saveAll(updatedTransferredJobs);
+
+            String note_1 = "Appointment has been transferred to "
+                    + job.getServiceCenter().getName()
+                    + ". The new appointment date and new appointment number is "
+                    + job.getAppointmentDate() + " and Job - " + job.getId() ;
+
+            jobServiceHelper.markTheTrack(job.getTransferedJob().getId(), JobTrackStatus.TRANSFERRED,
+                    JobTrackStatus.TRANSFERRED_S, note_1);
+
+            String note_2 = "This appointment is transferred appointment which is related to Job - "
+                    + job.getTransferedJob().getId()
+                    + ". The appointment date and time was "
+                    + job.getTransferedJob().getAppointmentDate()
+                    + " at "
+                    + CommonMethods.timeFormat(job.getTransferedJob().getAppointmentTime())
+                    + " in "
+                    + job.getTransferedJob().getServiceCenter().getName();
+
+            jobServiceHelper.markTheTrack(job.getId(), JobTrackStatus.TRANSFERRED,
+                    JobTrackStatus.TRANSFERRED_S, note_2);
+        }
+
         Customer customer = customerRepository.getCustomerById(job.getCustomer().getId());
 
         if (customer == null) {
@@ -1069,8 +1255,13 @@ public class JobServiceImpl implements JobService {
 
         if (!jobsAtPoints.isEmpty()) {
             List<JobAtPoint> updatedJobsAtPoints = jobsAtPoints.stream()
-                    .peek(j -> j.setDummyEntity(false))
-                    .toList();
+                    .peek(j -> {
+                        j.setDummyEntity(false);
+                        if(thisIsTransferredJob) {
+                            j.setServiceDownPrice(0);
+                            j.setServiceTotalPrice(0);
+                        }
+                    }).toList();
 
             jobAtPointRepository.saveAll(updatedJobsAtPoints);
         }
@@ -1085,6 +1276,24 @@ public class JobServiceImpl implements JobService {
         jobRepository.save(job);
         jobRepository.flush();
 
+        if (!thisIsTransferredJob) {
+            List<com.flex.service_module.impl.entities.Service> services = jobsAtPoints.stream()
+                    .map(JobAtPoint::getService).toList();
+
+            int totalPayment = services.stream()
+                    .mapToInt(com.flex.service_module.impl.entities.Service::getTotalPrice)
+                    .sum();
+
+            String note = "Appointment confirm. Paid the total payment "
+                    + totalPayment
+                    + "/= at "
+                    + job.getCreatedDate()
+                    + " in "
+                    + job.getServiceCenter().getName();
+
+            jobServiceHelper.markTheTrack(job.getId(), JobTrackStatus.PAYMENT_VERIFIED, JobTrackStatus.PAYMENT_VERIFIED_S, note);
+        }
+
         return SUCCESS("Job Created");
     }
 
@@ -1092,7 +1301,7 @@ public class JobServiceImpl implements JobService {
     public ResponseEntity<?> removeDummyJob(Integer jobId, Integer customerId, HttpServletRequest request) {
         log.info(request.getRequestURI());
 
-        Customer customer = customerRepository.findByIdAndDummyIsTrue(customerId);
+        Customer customer = customerRepository.getCustomerById(customerId);
 
         if (customer == null) {
             return CONFLICT("Customer not found");
@@ -1114,8 +1323,11 @@ public class JobServiceImpl implements JobService {
         jobRepository.delete(job);
         jobRepository.flush();
 
-        customerRepository.delete(customer);
-        customerRepository.flush();
+        if (customer.isDummy()) {
+            customerRepository.delete(customer);
+            customerRepository.flush();
+        }
+
 
         return SUCCESS("");
     }
@@ -1132,170 +1344,79 @@ public class JobServiceImpl implements JobService {
 
         List<ServicePoint> servicePoints = servicePointRepository.servicePointsByCenter(pointJobs.getServiceCenter());
 
+        if (servicePoints.isEmpty()) {
+            return DATA(null);
+        }
+
+        List<Integer> spIds = servicePoints.stream().map(ServicePoint::getId).toList();
+        LocalTime minimumServiceTime = availableServiceRepository.findMinimumServiceTimeByServicePointIds(spIds);
+
         List<JobsSchedule> jobsSchedules = new ArrayList<>();
+        int slotId = 1;
 
-        if (!servicePoints.isEmpty()) {
+        for (ServicePoint servicePoint : servicePoints) {
 
-            List<Integer> spIds = servicePoints.stream().map(ServicePoint::getId).toList();
+            long pointDurationSec = Duration
+                    .between(servicePoint.getOpenTime(), servicePoint.getCloseTime())
+                    .getSeconds();
 
-            LocalTime minimumServiceTime = availableServiceRepository.findMinimumServiceTimeByServicePointIds(spIds);
+            List<JobTimelineProjection> timeline = jobAtPointRepository
+                    .getJobTimeline(servicePoint.getId(), pointJobs.getDate());
 
-            int id = 1;
+            if (timeline.isEmpty()) {
+                // Entire day is free — emit one full free-slot entry
+                jobsSchedules.add(jobServiceHelper.buildFullDayFreeSlot(slotId++, servicePoint));
+                continue;
+            }
 
-            for (ServicePoint servicePoint : servicePoints) {
+            LocalTime lastEndTime = servicePoint.getOpenTime();
+            LocalTime sameJobStartTime = null;
+            Integer prevJobId = null;
 
-                long servicePointOpeningDurationBySec = Duration
-                        .between(servicePoint.getOpenTime(), servicePoint.getCloseTime())
-                        .getSeconds();
+            for (int i = 0; i < timeline.size(); i++) {
+                JobTimelineProjection entry = timeline.get(i);
 
-                List<JobTimelineProjection> jobTimelineProjections = jobAtPointRepository
-                        .getJobTimeline(servicePoint.getId(), pointJobs.getDate());
+                // Gap before this job? Emit a free-slot entry
+                if (lastEndTime.isBefore(entry.getStartTime())) {
+                    long gapSec = Duration.between(lastEndTime, entry.getStartTime()).getSeconds();
+                    jobsSchedules.add(jobServiceHelper.buildFreeSlotEntry(
+                            slotId++, servicePoint.getName(), lastEndTime, entry.getStartTime(),
+                            gapSec, pointDurationSec, minimumServiceTime));
+                }
 
-                if (jobTimelineProjections.isEmpty()) {
-                    // no jobs in this service point yet
-                    JobsSchedule freeSlot = JobsSchedule.builder()
-                            .id(id)
-                            .pointName(servicePoint.getName())
-                            .totalTime(100)
-                            .fromTo(servicePoint.getOpenTime() + " - " + servicePoint.getCloseTime())
-                            .freeSlot(true)
-                            .build();
-                    id++;
-
-                    jobsSchedules.add(freeSlot);
+                // Same job as previous? Merge into the existing schedule entry
+                if (prevJobId != null && prevJobId.equals(entry.getJobId())) {
+                    JobsSchedule existing = jobsSchedules.getLast();
+                    long extraSec = Duration.between(entry.getStartTime(), entry.getEndTime()).getSeconds();
+                    int extraPercent = jobServiceHelper.toPercent(extraSec, pointDurationSec);
+                    existing.setTotalTime(existing.getTotalTime() + extraPercent);
+                    existing.setFromTo(
+                            CommonMethods.timeFormat(sameJobStartTime) + " - "
+                                    + CommonMethods.timeFormat(entry.getEndTime()));
                 } else {
+                    // New job — track its start time and emit a new job-slot entry
+                    if (prevJobId == null) {
+                        prevJobId = entry.getJobId();
+                    }
+                    sameJobStartTime = entry.getStartTime();
+                    jobsSchedules.add(jobServiceHelper.buildJobSlotEntry(slotId++, servicePoint.getName(), entry, pointDurationSec));
+                }
 
-                    LocalTime lastEndTime = servicePoint.getOpenTime();
-                    LocalTime sameJobStartTime = null;
-                    int lastFreeTimeIndicator = 0;
-                    Integer prevJobId = null;
+                lastEndTime = entry.getEndTime();
 
-                    for (JobTimelineProjection jobTimelineProjection : jobTimelineProjections) {
-
-                        // check the last end time and this job start time has gap
-                        if (lastEndTime.isBefore(jobTimelineProjection.getStartTime())) {
-                            // if has, create a free slot before this job create.
-                            long freeTimeDurationFromSec = Duration
-                                    .between(lastEndTime, jobTimelineProjection.getStartTime())
-                                    .getSeconds();
-
-                            boolean ignoreThis = freeTimeDurationFromSec <= minimumServiceTime.toSecondOfDay();
-
-                            double freeTimePercent =
-                                    (freeTimeDurationFromSec * 100.0)
-                                            / servicePointOpeningDurationBySec;
-
-                            int freeTimeDurationFromPercent = (int) Math.round(freeTimePercent);
-
-                            JobsSchedule freeSlot = JobsSchedule.builder()
-                                    .id(id)
-                                    .pointName(servicePoint.getName())
-                                    .totalTime(freeTimeDurationFromPercent)
-                                    .fromTo(lastEndTime + " - " + jobTimelineProjection.getStartTime())
-                                    .freeSlot(true)
-                                    .ignoreThis(ignoreThis)
-                                    .build();
-                            id++;
-
-                            jobsSchedules.add(freeSlot);
-
-                        }
-
-                        if (prevJobId != null && prevJobId.equals(jobTimelineProjection.getJobId())) {
-
-                            JobsSchedule existingSchedule =
-                                    jobsSchedules.getLast();
-
-                            // then create this job slot
-                            long jobTimeDurationFromSec = Duration
-                                    .between(jobTimelineProjection.getStartTime(), jobTimelineProjection.getEndTime())
-                                    .getSeconds();
-
-                            double jobPercent =
-                                    (jobTimeDurationFromSec * 100.0)
-                                            / servicePointOpeningDurationBySec;
-
-                            int jobTimeDurationFromPercent = (int) Math.round(jobPercent);
-
-                            existingSchedule.setTotalTime(existingSchedule.getTotalTime() + jobTimeDurationFromPercent);
-                            existingSchedule.setFromTo(sameJobStartTime + " - " + jobTimelineProjection.getEndTime());
-
-                        } else {
-
-                            if (prevJobId == null) {
-                                prevJobId = jobTimelineProjection.getJobId();
-                            }
-
-                            sameJobStartTime = jobTimelineProjection.getStartTime();
-
-                            // then create this job slot
-                            long jobTimeDurationFromSec = Duration
-                                    .between(jobTimelineProjection.getStartTime(), jobTimelineProjection.getEndTime())
-                                    .getSeconds();
-
-                            double jobPercent =
-                                    (jobTimeDurationFromSec * 100.0)
-                                            / servicePointOpeningDurationBySec;
-
-                            int jobTimeDurationFromPercent = (int) Math.round(jobPercent);
-
-                            // then after create job
-                            JobsSchedule jobSlot = JobsSchedule.builder()
-                                    .id(id)
-                                    .jobAtPointId(jobTimelineProjection.getJobAtPointId())
-                                    .jobId(jobTimelineProjection.getJobId())
-                                    .customerName(jobTimelineProjection.getCustomerName())
-                                    .pointName(servicePoint.getName())
-                                    .serviceName(jobTimelineProjection.getServiceName())
-                                    .status(jobTimelineProjection.getStatus())
-                                    .totalTime(jobTimeDurationFromPercent)
-                                    .fromTo(jobTimelineProjection.getStartTime() + " - " + jobTimelineProjection.getEndTime())
-                                    .freeSlot(false)
-                                    .verified(jobTimelineProjection.getVerified())
-                                    .build();
-
-                            jobsSchedules.add(jobSlot);
-
-                            id++;
-                        }
-
-                        lastEndTime = jobTimelineProjection.getEndTime();
-
-                        if (lastFreeTimeIndicator == jobTimelineProjections.size() - 1) {
-                            long freeTimeDurationFromSec = Duration
-                                    .between(lastEndTime, servicePoint.getCloseTime())
-                                    .getSeconds();
-
-                            if (freeTimeDurationFromSec > 0) {
-                                double freeTimePercent =
-                                        (freeTimeDurationFromSec * 100.0)
-                                                / servicePointOpeningDurationBySec;
-
-                                boolean ignoreThis = freeTimeDurationFromSec <= minimumServiceTime.toSecondOfDay();
-
-                                int freeTimeDurationFromPercent = (int) Math.round(freeTimePercent);
-
-                                JobsSchedule freeSlot = JobsSchedule.builder()
-                                        .id(id)
-                                        .pointName(servicePoint.getName())
-                                        .totalTime(freeTimeDurationFromPercent)
-                                        .fromTo(lastEndTime + " - " + servicePoint.getCloseTime())
-                                        .freeSlot(true)
-                                        .ignoreThis(ignoreThis)
-                                        .build();
-
-                                jobsSchedules.add(freeSlot);
-                            }
-                        }
-                        lastFreeTimeIndicator++;
+                // Last item in timeline? Append trailing free slot if room remains
+                if (i == timeline.size() - 1) {
+                    long trailingSec = Duration.between(lastEndTime, servicePoint.getCloseTime()).getSeconds();
+                    if (trailingSec > 0) {
+                        jobsSchedules.add(jobServiceHelper.buildFreeSlotEntry(
+                                slotId++, servicePoint.getName(), lastEndTime, servicePoint.getCloseTime(),
+                                trailingSec, pointDurationSec, minimumServiceTime));
                     }
                 }
             }
-
-            return DATA(jobsSchedules);
         }
 
-        return DATA(null);
+        return DATA(jobsSchedules);
     }
 
     @Override
@@ -1331,8 +1452,15 @@ public class JobServiceImpl implements JobService {
 
             List<JobAtPoint> jobAtPoints = jobAtPointRepository.findAllByJobId(jobDetail.getJobId());
 
-            Integer status = jobAtPoints.stream()
-                    .anyMatch(jobAtPoint -> jobAtPoint.getStatus() == JobStatus.IN_SERVICE) ? JobStatus.IN_SERVICE : null;
+            Integer status;
+
+            if (jobAtPoints.stream().anyMatch(j -> j.getStatus() == JobStatus.IN_SERVICE)) {
+                status = JobStatus.IN_SERVICE;
+            } else if (jobAtPoints.stream().anyMatch(j -> j.getStatus() == JobStatus.TRANSFER)) {
+                status = JobStatus.TRANSFER;
+            } else {
+                status = null;
+            }
 
             int completedPercentage = 0;
 
@@ -1420,6 +1548,71 @@ public class JobServiceImpl implements JobService {
             jobAtPointRepository.save(jobAtPoint);
         }
 
+        String note = "Customer has arrived at "
+                + CommonMethods.getCurrentTime()
+                + " to "
+                + job.getServiceCenter().getName() + ".";
+
+        if (loginAgentId == null) {
+            note = note + " But no agent were already logged in to the " + jobsAtPoints.getFirst().getServicePoint().getName();
+        }
+
+        jobServiceHelper.markTheTrack(job.getId(), JobTrackStatus.CUSTOMER_ARRIVED, JobTrackStatus.CUSTOMER_ARRIVED_S, note);
+
         return SUCCESS("Customer arrived for " + job.getId());
+    }
+
+    @Override
+    public ResponseEntity<?> transferJob(TransferJob transferJob, HttpServletRequest request) {
+        log.info(request.getRequestURI());
+
+        Job job = jobRepository.getJobById(transferJob.getJobId());
+
+        if (job == null) {
+            return CONFLICT("Job not found");
+        }
+
+        ServiceCenter serviceCenter = serviceCenterRepository.findByIdAndDeletedIsFalse(transferJob.getCenterId());
+
+        if (serviceCenter == null) {
+            return CONFLICT("Service center not found");
+        }
+
+        List<ServicePoint> servicePoints = servicePointRepository
+                .findAllByServiceCenter_IdAndDeletedIsFalse(transferJob.getCenterId());
+
+        List<JobAtPoint> jobAtPoints = jobAtPointRepository.findAllByJobId(transferJob.getJobId());
+
+        List<com.flex.service_module.impl.entities.Service> services = jobAtPoints.stream()
+                .map(JobAtPoint::getService).toList();
+
+        LocalTime nextStartTime = prepareJobSubMethods.nextStartTime(serviceCenter.getOpenTime(),
+                transferJob.getNextAppointmentDate());
+
+        // create new dummy job
+        Job newDummyJob = Job.builder()
+                .customer(job.getCustomer())
+                .serviceCenter(serviceCenter)
+                .transferedJob(job)
+                .appointmentDate(transferJob.getNextAppointmentDate())
+                .status(JobStatus.PENDING)
+                .jobType(JobTypes.WEB)
+                .description(job.getDescription())
+                .createdDate(LocalDate.now())
+                .createdTime(LocalTime.now())
+                .dummy(true)
+                .build();
+
+        Job newJob = jobRepository.save(newDummyJob);
+
+        PreparedJobV2 preparedJobV2 = prepareJobSubMethods
+                .loopServicesAndScheduleJobs(services, servicePoints, newJob,
+                        job.getCustomer(), nextStartTime, transferJob.getNextAppointmentDate());
+
+        if (preparedJobV2 == null) {
+            return CONFLICT("No available slots for this service center for " +  transferJob.getNextAppointmentDate());
+        }
+
+        return DATA(preparedJobV2);
     }
 }

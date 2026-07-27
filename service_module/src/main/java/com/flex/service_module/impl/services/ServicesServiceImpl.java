@@ -375,7 +375,7 @@ public class ServicesServiceImpl implements ServicesService {
             return CONFLICT("Service not found");
         }
 
-        AvailableService availableService = availableServiceRepository.availableService(service.getId(),
+        AvailableService availableService = availableServiceRepository.availableServiceV1(service.getId(),
                 servicePoint.getId());
 
         if (availableService == null) {

@@ -6,20 +6,27 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalTime;
+import java.util.List;
 
 @Data
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
 public class SubJobDetails {
-    private String service;
     private String pointName;
-    private String startTime;
-    private String endTime;
-    private String actualStartTime;
-    private String actualEndTime;
-    private String agent;
-    private Integer status;
-    private boolean completed;
-    private boolean estimatedEndTime;
+    private PointJobDetails pointJobDetails;
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class PointJobDetails {
+        private List<String> services;
+        private String startTime;
+        private String endTime;
+        private String actualStartTime;
+        private String actualEndTime;
+        private String agent;
+        private Integer status;
+    }
 }

@@ -1,6 +1,7 @@
 package com.flex.job_module.impl.repositories;
 
 import com.flex.job_module.api.http.DTO.AgentJobs;
+import com.flex.job_module.api.http.DTO.JobAtPointDetails;
 import com.flex.job_module.api.http.DTO.JobTimelineProjection;
 import com.flex.job_module.api.http.DTO.MinimumServiceTimePoint;
 import com.flex.job_module.impl.entities.JobAtPoint;
@@ -18,6 +19,39 @@ import java.util.Optional;
 public interface JobAtPointRepository extends JpaRepository<JobAtPoint, Integer> {
 
     List<JobAtPoint> findAllByJobId(Integer jobId);
+
+    List<JobAtPoint> findAllByJobIdOrderByStartTime(Integer jobId);
+
+    @Query(value = """
+        SELECT
+            sp.name AS pointName,
+            GROUP_CONCAT(DISTINCT s.name ORDER BY s.name SEPARATOR ', ') AS services,
+            SUM(s.down_price) as downPayment,
+            MIN(jp.start_time) AS expectedStartTime,
+            MAX(jp.end_time) AS expectedEndTime,
+            MIN(aj.start_time) AS startedTime,
+            MAX(aj.end_time) AS endTime,
+            CONCAT(u.f_name, ' ',u.l_name) AS agent,
+            jp.status
+            #CASE
+            #   WHEN SUM(CASE WHEN jp.status = 1 THEN 1 ELSE 0 END) > 0 THEN 1
+            #   WHEN SUM(CASE WHEN jp.status = 2 THEN 1 ELSE 0 END) > 0
+            #    AND SUM(CASE WHEN jp.status = 0 THEN 1 ELSE 0 END) > 0 THEN 3
+            #   ELSE MIN(jp.status) END AS status
+        FROM jobs_at_point jp
+        LEFT JOIN service_point sp
+            ON jp.service_point_id = sp.id
+        LEFT JOIN services s
+            ON jp.service_id = s.id
+        LEFT JOIN agent_jobs aj
+            ON jp.id = aj.job_at_point_id
+        LEFT JOIN users u
+            ON aj.agent_id = u.id
+        WHERE jp.job_id = :jobId
+        GROUP BY sp.id
+        ORDER BY expectedStartTime
+        """, nativeQuery = true)
+    List<JobAtPointDetails> findJobAtPointDetails(@Param("jobId") Integer jobId);
 
     @Query("SELECT j.id FROM JobAtPoint j WHERE j.createdDate=:date AND j.dummyEntity = true")
     List<Integer> getDummyJobIds(@Param("date") LocalDate date);
@@ -43,6 +77,11 @@ public interface JobAtPointRepository extends JpaRepository<JobAtPoint, Integer>
                                                         @Param("jobId") Integer jobId,
                                                   @Param("appointmentDate") LocalDate appointmentDate);
 
+    @Query("SELECT j.id FROM JobAtPoint j WHERE j.job.id=:jobId " +
+            "AND j.job.appointmentDate=:appointmentDate AND j.status = 0")
+    List<Integer> getPendingJobsAtPointIdsByJobId(@Param("jobId") Integer jobId,
+                                           @Param("appointmentDate") LocalDate appointmentDate);
+
     @Query("SELECT j FROM JobAtPoint j " +
             "WHERE j.servicePoint.id=:point " +
             "and j.job.id=:id " +
@@ -51,6 +90,13 @@ public interface JobAtPointRepository extends JpaRepository<JobAtPoint, Integer>
             @Param("point") Integer point,
             @Param("id") Integer job,
             @Param("date") LocalDate appointmentDate);
+
+    @Query("SELECT new JobAtPoint(jp.job.id, min(jp.startTime), max(jp.endTime)) " +
+            "FROM JobAtPoint jp " +
+            "WHERE jp.servicePoint.id = :id AND jp.job.appointmentDate=:date " +
+            "GROUP BY jp.job ORDER BY jp.startTime")
+    List<JobAtPoint> getCompressedJobsByPoint(@Param("id") Integer servicePointId,
+                                              @Param("date") LocalDate appointmentDate);
 
     @Query("""
        SELECT j
@@ -94,6 +140,7 @@ public interface JobAtPointRepository extends JpaRepository<JobAtPoint, Integer>
                 WHEN jp.status = 1 THEN 'serving'
                 WHEN jp.status = 2 THEN 'completed'
                 WHEN jp.status = 5 THEN 'timeout'
+                WHEN jp.status = 6 THEN 'transferred'
                 ELSE 'unknown'
             END AS status,
             jp.start_time AS startTime,
@@ -128,9 +175,13 @@ public interface JobAtPointRepository extends JpaRepository<JobAtPoint, Integer>
     List<JobAtPoint> findExpiredDummy(LocalDate date, LocalTime time);
 
     @Query("SELECT j.job.id FROM JobAtPoint j WHERE j.servicePoint.id=:servicePointId " +
-            "AND j.job.appointmentDate=:appointmentDate AND j.allowToServe = true AND j.status < 2 GROUP BY j.job.id")
+            "AND j.job.appointmentDate=:appointmentDate AND j.allowToServe = true AND j.status < 2 GROUP BY j.job.id ORDER BY j.startTime")
     List<Integer> getJobsIdsInPoint(@Param("servicePointId") Integer pointId,
                                     @Param("appointmentDate") LocalDate appointmentDate);
+
+    @Query("SELECT new JobAtPoint(jp.id, jp.service.downPrice, jp.service.totalPrice) " +
+            "FROM JobAtPoint jp WHERE jp.job.id in :ids")
+    List<JobAtPoint> getPricesOfJobsByJobIds(@Param("ids") List<Integer> jobIds);
 
     @Modifying
     @Transactional

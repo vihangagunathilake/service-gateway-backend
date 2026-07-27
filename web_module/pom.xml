@@ -14,7 +14,7 @@
     <name>web_module</name>
     <packaging>war</packaging>
     <build>
-        <finalName>service-gateway</finalName>
+        <finalName>service-gateway-backend</finalName>
     </build>
 
     <dependencies>

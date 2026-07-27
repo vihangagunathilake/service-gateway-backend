@@ -10,11 +10,17 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface ServicePointRepository extends JpaRepository<ServicePoint, Integer> {
-    boolean existsByNameAndDeletedIsFalse(String name);
+    boolean existsByNameAndServiceCenter_IdAndDeletedIsFalse(String name, Integer serviceCenterId);
 
     boolean existsByNameAndIdNotAndDeletedIsFalse(String name, Integer id);
 
     ServicePoint findByIdAndDeletedIsFalse(Integer id);
+
+    List<ServicePoint> findAllByServiceCenter_IdAndDeletedIsFalse(Integer serviceCenterId);
+
+    @Query("SELECT count(sp) FROM ServicePoint sp WHERE sp.serviceCenter.serviceProvider.id=:spId " +
+            "AND sp.serviceCenter.deleted = false AND sp.deleted = false")
+    int getCountByServiceProviderId(@Param("spId") Integer serviceCenterId);
 
     @Query("SELECT new ServicePoint(s.id, s.name, s.shortName, s.openTime, s.closeTime, s.temporaryClosed, s.deleted, " +
             "s.serviceCenter.id, s.serviceCenter.name, COUNT(av.service.id)) " +
@@ -63,7 +69,7 @@ public interface ServicePointRepository extends JpaRepository<ServicePoint, Inte
         SELECT sp
         FROM ServicePoint sp
         JOIN AvailableService av ON av.servicePoint.id = sp.id
-        WHERE av.service.id IN :serviceIds
+        WHERE sp.serviceCenter.id = :centerId AND av.service.id IN :serviceIds
           AND sp.deleted = false
           AND sp.temporaryClosed = false
         GROUP BY sp.id
@@ -71,6 +77,7 @@ public interface ServicePointRepository extends JpaRepository<ServicePoint, Inte
     """)
     List<ServicePoint> findServicePointsHavingAllServices(
             @Param("serviceIds") List<Integer> serviceIds,
+            @Param("centerId") Integer centerId,
             @Param("size") long size
     );
 
@@ -78,7 +85,7 @@ public interface ServicePointRepository extends JpaRepository<ServicePoint, Inte
         SELECT al.user.id
         FROM AgentLogin al
         WHERE al.servicePoint.id = :servicePointId
-          AND date(al.loginTime) = current_date()
+          AND al.loginTime = current_date()
           AND al.logoutTime IS NULL
     """)
     Integer loginAgentAtPoint(@Param("servicePointId") Integer servicePointId);

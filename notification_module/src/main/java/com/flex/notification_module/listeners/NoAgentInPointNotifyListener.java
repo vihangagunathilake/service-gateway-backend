@@ -10,14 +10,16 @@ import com.flex.notification_module.impl.entities.UserNotification;
 import com.flex.notification_module.impl.repositories.NotificationAccessRepository;
 import com.flex.notification_module.impl.repositories.NotificationTypeRepository;
 import com.flex.notification_module.impl.repositories.UserNotificationRepository;
-import com.flex.notification_module.kafka.events.publishers.NoAgentInPointPublisher;
+import com.flex.notification_module.kafka.topics.KafkaNotificationTopics;
 import com.flex.service_module.impl.entities.ServicePoint;
 import com.flex.service_module.impl.repositories.ServicePointRepository;
 import com.flex.user_module.impl.entities.User;
 import com.flex.user_module.impl.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,7 +40,8 @@ public class NoAgentInPointNotifyListener {
     private final NotificationAccessRepository notificationAccessRepository;
     private final UserNotificationRepository userNotificationRepository;
 
-    private final NoAgentInPointPublisher noAgentInPointPublisher;
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
 
     @Value("${app.frontend.url}")
     private String baseUrl;
@@ -100,7 +103,10 @@ public class NoAgentInPointNotifyListener {
                     .notificationType(NotificationConstants.NO_AGENT_FOR_JOB)
                     .build();
 
-            noAgentInPointPublisher.publish(notificationEvent);
+            messagingTemplate.convertAndSend(
+                    KafkaNotificationTopics.NO_AGENT_IN_POINT_TOPIC + user.getId(),
+                    notificationEvent
+            );
         }
     }
 
@@ -113,6 +119,8 @@ public class NoAgentInPointNotifyListener {
         userNotification.setCreatedTime(CommonMethods.getCurrentTime());
         userNotification.setDescription(NotificationDescription.NO_AGENT
                 + servicePoint.getName() + " in " + servicePoint.getServiceCenter().getName());
+        userNotification.setServicePoint(servicePoint);
+        userNotification.setServiceCenter(servicePoint.getServiceCenter());
         userNotification.setMarkedAsView(false);
         userNotification.setMarkedAsRead(false);
         return userNotification;

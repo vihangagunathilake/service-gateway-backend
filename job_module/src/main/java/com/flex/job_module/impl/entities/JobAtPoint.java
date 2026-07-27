@@ -60,4 +60,23 @@ public class JobAtPoint {
 
     private boolean dummyEntity;
     private boolean allowToServe;
+
+    @Transient
+    private Integer mainJobId;
+    @Transient
+    private Integer serviceDownPrice;
+    @Transient
+    private Integer serviceTotalPrice;
+
+    public JobAtPoint(Integer mainJobId, LocalTime startTime, LocalTime endTime) {
+        this.mainJobId = mainJobId;
+        this.startTime = startTime;
+        this.endTime = endTime;
+    }
+
+    public JobAtPoint(Integer id, Integer serviceDownPrice, Integer serviceTotalPrice) {
+        this.id = id;
+        this.serviceDownPrice = serviceDownPrice;
+        this.serviceTotalPrice = serviceTotalPrice;
+    }
 }

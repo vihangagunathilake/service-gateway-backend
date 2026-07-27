@@ -1,13 +1,18 @@
 package com.flex.job_module.impl.services.helper;
 
+import com.flex.common_module.CommonMethods;
 import com.flex.common_module.constants.Colors;
+import com.flex.job_module.api.http.DTO.JobTimelineProjection;
+import com.flex.job_module.api.http.responses.JobsSchedule;
 import com.flex.job_module.constants.JobStatus;
 import com.flex.job_module.impl.entities.Customer;
 import com.flex.job_module.impl.entities.Job;
 import com.flex.job_module.impl.entities.JobAtPoint;
+import com.flex.job_module.impl.entities.JobTrack;
 import com.flex.job_module.impl.repositories.CustomerRepository;
 import com.flex.job_module.impl.repositories.JobAtPointRepository;
 import com.flex.job_module.impl.repositories.JobRepository;
+import com.flex.job_module.impl.repositories.JobTrackRepository;
 import com.flex.service_module.impl.entities.Service;
 import com.flex.service_module.impl.entities.ServicePoint;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +44,7 @@ public class JobServiceHelper {
     private final CustomerRepository customerRepository;
     private final JobRepository jobRepository;
     private final JobAtPointRepository jobAtPointRepository;
+    private final JobTrackRepository jobTrackRepository;
 
     public JobAtPoint createJobAtPoint(ServicePoint servicePoint, Service service, Job job, LocalTime startTime, boolean dummy) {
         // calculate end time
@@ -249,6 +255,85 @@ public class JobServiceHelper {
 
         // no free slots
         return null;
+    }
+
+    /** Builds a full-day free-slot entry (no jobs at all in the service point). */
+    public JobsSchedule buildFullDayFreeSlot(int id, ServicePoint servicePoint) {
+        return JobsSchedule.builder()
+                .id(id)
+                .pointName(servicePoint.getName())
+                .totalTime(100)
+                .fromTo(CommonMethods.timeFormat(servicePoint.getOpenTime())
+                        + " - "
+                        + CommonMethods.timeFormat(servicePoint.getCloseTime()))
+                .freeSlot(true)
+                .build();
+    }
+
+    /** Builds a free-slot entry between two known time boundaries. */
+    public JobsSchedule buildFreeSlotEntry(int id, String pointName,
+                                            LocalTime from, LocalTime to,
+                                            long durationSec, long pointDurationSec,
+                                            LocalTime minimumServiceTime) {
+        boolean ignoreThis = durationSec <= minimumServiceTime.toSecondOfDay();
+        int percent = toPercent(durationSec, pointDurationSec);
+        return JobsSchedule.builder()
+                .id(id)
+                .pointName(pointName)
+                .totalTime(percent)
+                .fromTo(CommonMethods.timeFormat(from) + " - " + CommonMethods.timeFormat(to))
+                .freeSlot(true)
+                .ignoreThis(ignoreThis)
+                .build();
+    }
+
+    /** Builds a job-slot entry from a timeline projection. */
+    public JobsSchedule buildJobSlotEntry(int id, String pointName,
+                                           JobTimelineProjection entry, long pointDurationSec) {
+        long durationSec = Duration.between(entry.getStartTime(), entry.getEndTime()).getSeconds();
+        int percent = toPercent(durationSec, pointDurationSec);
+        return JobsSchedule.builder()
+                .id(id)
+                .jobAtPointId(entry.getJobAtPointId())
+                .jobId(entry.getJobId())
+                .customerName(entry.getCustomerName())
+                .pointName(pointName)
+                .serviceName(entry.getServiceName())
+                .status(entry.getStatus())
+                .totalTime(percent)
+                .fromTo(CommonMethods.timeFormat(entry.getStartTime())
+                        + " - "
+                        + CommonMethods.timeFormat(entry.getEndTime()))
+                .freeSlot(false)
+                .verified(entry.getVerified())
+                .build();
+    }
+
+    /** Converts a duration in seconds to a percentage of the total point duration, rounded. */
+    public int toPercent(long durationSec, long totalSec) {
+        return (int) Math.round((durationSec * 100.0) / totalSec);
+    }
+
+    public void markTheTrack(Integer jobId, Integer status, String title, String note) {
+
+        Job job = jobRepository.getJobById(jobId);
+
+        if (job == null) {
+            log.error("job track creation - no job found from {}", jobId);
+            return;
+        }
+
+        JobTrack jobTrack = JobTrack.builder()
+                .job(job)
+                .title(title)
+                .status(status)
+                .addedDate(CommonMethods.getCurrentDate())
+                .addedTime(CommonMethods.getCurrentTime())
+                .note(note)
+                .build();
+
+        jobTrackRepository.save(jobTrack);
+
     }
 
 }

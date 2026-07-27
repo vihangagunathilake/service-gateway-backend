@@ -1,6 +1,8 @@
 package com.flex.notification_module.impl.entities;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.flex.service_module.impl.entities.ServiceCenter;
+import com.flex.service_module.impl.entities.ServicePoint;
 import com.flex.user_module.impl.entities.User;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -28,6 +30,12 @@ public class UserNotification {
     @ManyToOne
     @JoinColumn(name = "notification_type_id")
     private NotificationType notificationType;
+    @ManyToOne
+    @JoinColumn(name = "service_point_id")
+    private ServicePoint servicePoint;
+    @ManyToOne
+    @JoinColumn(name = "service_center_id")
+    private ServiceCenter serviceCenter;
     private String description;
     private String title;
     @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Colombo")

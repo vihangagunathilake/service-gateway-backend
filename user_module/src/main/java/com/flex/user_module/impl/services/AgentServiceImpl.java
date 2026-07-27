@@ -132,7 +132,8 @@ public class AgentServiceImpl implements AgentService {
         List<AgentLogin> previousLogins = agentLoginRepository.getAgentLogins(userId);
 
         for (AgentLogin agentLogin : previousLogins) {
-            agentLogin.setLogoutTime(getCurrentDateTime());
+            agentLogin.setLogoutDate(getCurrentDate());
+            agentLogin.setLogoutTime(getCurrentTime());
 
             agentLoginRepository.save(agentLogin);
         }
@@ -140,7 +141,8 @@ public class AgentServiceImpl implements AgentService {
         AgentLogin agentLogin = AgentLogin.builder()
                 .user(user)
                 .servicePoint(servicePoint)
-                .loginTime(getCurrentDateTime())
+                .loginDate(getCurrentDate())
+                .loginTime(getCurrentTime())
                 .build();
 
         agentLoginRepository.save(agentLogin);
@@ -160,6 +162,8 @@ public class AgentServiceImpl implements AgentService {
 
         List<Integer> jobsIds = jobAtPointRepository.getJobsIdsInPoint(servicePointId,
                 getCurrentDate());
+
+        log.info("ids: {}", jobsIds);
 
         if (jobsIds.isEmpty()) {
             log.warn("jobs not found in {}", servicePointId);
@@ -314,18 +318,31 @@ public class AgentServiceImpl implements AgentService {
                         getCurrentDate());
 
         int status = PENDING;
+        int jobStatus;
 
         for (JobAtPoint jobAtPoint : jobAtPoints) {
             if (jobAtPoint.getStatus() == PENDING) {
                 status = IN_SERVICE;
-                job.setStatus(status);
+                jobStatus = status;
+                job.setStatus(jobStatus);
                 jobAtPoint.setStatus(status);
                 jobRepository.save(job);
                 jobAtPointRepository.save(jobAtPoint);
                 agentServiceHelper.servingJob(jobAtPoint, agent, status);
             } else if (jobAtPoint.getStatus() == IN_SERVICE) {
                 status = COMPLETED;
-                job.setStatus(status);
+                jobStatus = status;
+
+                // first job at point may completed. But there are some other pending job at points.
+                List<Integer> pendingJobAtPointsIds = jobAtPointRepository.getPendingJobsAtPointIdsByJobId(
+                        job.getId(), job.getAppointmentDate()
+                );
+
+                if (!pendingJobAtPointsIds.isEmpty()) {
+                    jobStatus = ON_GOING;
+                }
+
+                job.setStatus(jobStatus);
                 jobAtPoint.setStatus(status);
                 jobRepository.save(job);
                 jobAtPointRepository.save(jobAtPoint);
@@ -333,12 +350,16 @@ public class AgentServiceImpl implements AgentService {
             }
         }
 
+        agentServiceHelper.markTheAgentLogin(job.getId(), agent);
+
         String responseMessage = null;
 
         if (status == IN_SERVICE) {
             responseMessage = job.getId() + " in serving";
+            agentServiceHelper.markTheTokenInServing(job.getId(), agent, servicePoint.getName());
         } else if (status == COMPLETED) {
             responseMessage = job.getId() + " completed";
+            agentServiceHelper.markTheTokenCompleted(job.getId(), agent, servicePoint.getName());
         }
 
         return SUCCESS(responseMessage);

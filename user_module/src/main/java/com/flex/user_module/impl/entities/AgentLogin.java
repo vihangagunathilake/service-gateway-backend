@@ -9,7 +9,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Data
 @Entity
@@ -28,11 +30,13 @@ public class AgentLogin {
     @ManyToOne
     @JoinColumn(name = "service_point_id")
     private ServicePoint servicePoint;
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Asia/Colombo")
-    @Column(columnDefinition = "TIMESTAMP default CURRENT_TIMESTAMP")
-    private LocalDateTime loginTime;
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Asia/Colombo")
-    @Column(columnDefinition = "TIMESTAMP default CURRENT_TIMESTAMP")
-    private LocalDateTime logoutTime;
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Colombo")
+    private LocalDate loginDate;
+    @JsonFormat(pattern = "HH:mm:ss", timezone = "Asia/Colombo")
+    private LocalTime loginTime;
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Colombo")
+    private LocalDate logoutDate;
+    @JsonFormat(pattern = "HH:mm:ss", timezone = "Asia/Colombo")
+    private LocalTime logoutTime;
 
 }

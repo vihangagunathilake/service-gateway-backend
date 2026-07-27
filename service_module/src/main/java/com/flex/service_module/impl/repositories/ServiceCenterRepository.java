@@ -41,6 +41,9 @@ public interface ServiceCenterRepository extends JpaRepository<ServiceCenter, In
             Pageable pageable
     );
 
+    @Query("SELECT count(sc) FROM ServiceCenter sc WHERE sc.serviceProvider.id=:providerId AND sc.deleted = false")
+    int getCountByServiceProvider(@Param("providerId") Integer providerId);
+
     @Query(
             "SELECT sc FROM ServiceCenter sc " +
                     "WHERE sc.serviceProvider.id = :providerId " +

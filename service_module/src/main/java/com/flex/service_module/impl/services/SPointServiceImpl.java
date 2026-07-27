@@ -50,18 +50,19 @@ public class SPointServiceImpl implements ServicePointService {
             return CONFLICT("Service provider not found");
         }
 
-        if (servicePointRepository.existsByNameAndDeletedIsFalse(servicePoint.getName())) {
-            return CONFLICT("Service point already exists");
-        }
-
-        if (servicePoint.getServiceCenter() == null) {
-            return CONFLICT("Service center not found");
-        }
-
         ServiceCenter serviceCenter = serviceCenterRepository
                 .findByIdAndDeletedIsFalse(servicePoint.getServiceCenter().getId());
 
         if (serviceCenter == null) {
+            return CONFLICT("Service center not found");
+        }
+
+        if (servicePointRepository.existsByNameAndServiceCenter_IdAndDeletedIsFalse(servicePoint.getName(),
+                serviceCenter.getId())) {
+            return CONFLICT("Service point already exists");
+        }
+
+        if (servicePoint.getServiceCenter() == null) {
             return CONFLICT("Service center not found");
         }
 

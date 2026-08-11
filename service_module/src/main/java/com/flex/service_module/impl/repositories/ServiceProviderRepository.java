@@ -16,4 +16,6 @@ public interface ServiceProviderRepository extends JpaRepository<ServiceProvider
     boolean existsByIdAndDeletedIsFalse(Integer id);
 
     ServiceProvider findByProviderIdAndDeletedIsFalse(String providerId);
+
+    ServiceProvider findByIdAndDeletedIsFalse(Integer id);
 }

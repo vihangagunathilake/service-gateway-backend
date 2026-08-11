@@ -1,5 +1,6 @@
 package com.flex.dashboard_module.api.http.response;
 
+import com.flex.job_module.api.http.DTO.ClusterWiseDownPayments;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -21,6 +22,7 @@ public class DashboardData {
     private Long completedJobs;
     private Long totalEarnings;
     private List<CenterJobs> centerJobs;
+    private List<ClusterWiseDownPayments> downpaymentData;
 
     @Data
     @Builder
@@ -30,7 +32,7 @@ public class DashboardData {
         private Integer count;
         private Integer alreadyPaid;
         private Integer pendingPaid;
-        private Integer rescheduleCount;
+        private Long rescheduleCount;
     }
 
     @Data

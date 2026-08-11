@@ -1,4 +1,6 @@
 package com.flex.job_module.events;
 
-public record NoAgentInPointEvent(Integer pointId) {
+import com.flex.job_module.impl.entities.Job;
+
+public record NoAgentInPointEvent(Integer pointId, Job job) {
 }

@@ -9,6 +9,8 @@ import java.util.List;
 
 public interface AgentLoginRepository extends JpaRepository<AgentLogin, Integer> {
 
+    AgentLogin getAgentLoginById(Integer id);
+
     @Query("SELECT a FROM AgentLogin a WHERE a.user.id=:uid AND a.loginDate = current_date " +
             "AND a.logoutTime is null")
     AgentLogin getAgentLogin(@Param("uid") Integer userId);

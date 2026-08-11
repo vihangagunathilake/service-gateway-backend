@@ -93,6 +93,9 @@ public interface UserRepository extends JpaRepository<User, Integer> {
             @Param("id") Integer id
     );
 
+    @Query("select u.id from User u WHERE u.serviceProvider.id=:provider and u.userType<>:userType AND u.deleted = false")
+    List<Integer> getUserIdsByProviderIdButNotUserType(@Param("provider") Integer provider, @Param("userType") Integer userType);
+
     @Query("SELECT u.id as id, CONCAT(u.fName, ' ', u.lName) AS name FROM User u " +
             "WHERE u.serviceProvider.id=:providerId AND (u.serviceCenter is null OR u.serviceCenter.id <> :centerId) " +
             "AND u.userType <> 1 AND u.deleted is false")

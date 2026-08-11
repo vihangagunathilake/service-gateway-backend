@@ -234,6 +234,8 @@ public class SCServiceImpl implements SCService {
                 .name(serviceCenter.getName())
                 .location(serviceCenter.getLocation())
                 .contact(serviceCenter.getContact())
+                .openTime(serviceCenter.getOpenTime())
+                .closeTime(serviceCenter.getCloseTime())
                 .fOpenTime(sCServiceHelper.formatTimeRange(serviceCenter.getOpenTime()))
                 .fCloseTime(sCServiceHelper.formatTimeRange(serviceCenter.getCloseTime()))
                 .build());

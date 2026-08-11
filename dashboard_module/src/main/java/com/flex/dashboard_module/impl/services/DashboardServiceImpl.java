@@ -6,6 +6,7 @@ import com.flex.common_module.security.utils.JwtUtil;
 import com.flex.dashboard_module.api.http.response.DashboardData;
 import com.flex.dashboard_module.api.services.DashboardService;
 import com.flex.job_module.api.http.DTO.CenterJob;
+import com.flex.job_module.api.http.DTO.ClusterWiseDownPayments;
 import com.flex.job_module.api.http.DTO.DailyJobCounts;
 import com.flex.job_module.constants.JobStatus;
 import com.flex.job_module.impl.entities.JobAtPoint;
@@ -104,9 +105,15 @@ public class DashboardServiceImpl implements DashboardService {
             totalPayment = totalPayment + jobAtPoint.getServiceTotalPrice();
         }
 
-        //todo reschedule under development
+
+        Long transferred = dailyJobCounts == null || dailyJobCounts.getTransferred() == null ?
+                0 : dailyJobCounts.getTransferred();
+
         dashboardData.setTimeoutJobs(DashboardData.TimeoutJobs.builder()
-                .count(timeoutJobIds.size()).alreadyPaid(totalDownPayment).pendingPaid(totalPayment - totalDownPayment)
+                .count(timeoutJobIds.size())
+                .alreadyPaid(totalDownPayment)
+                .pendingPaid(totalPayment - totalDownPayment)
+                .rescheduleCount(transferred)
                 .build());
 
         //------ operational centers
@@ -119,8 +126,11 @@ public class DashboardServiceImpl implements DashboardService {
 
         int activeCenters = agentLoginRepository.getActiveCentersByServiceProvider(user.getServiceProvider().getId());
 
+
         //todo: in future may be multiple agents can login to the same point. in that case this will change
         int agentLoginCount = agentLoginRepository.getAgentLoginCountByServiceProvider(user.getServiceProvider().getId());
+
+        List<ClusterWiseDownPayments> clusterWiseDownPayments = jobRepository.getClusterWiseDownPayments(user.getServiceProvider().getId());
 
         DashboardData.OperationalCenters operationalCenters = DashboardData.OperationalCenters.builder()
                 .active(activeCenters)
@@ -131,9 +141,11 @@ public class DashboardServiceImpl implements DashboardService {
 
         dashboardData.setOperationalCenters(operationalCenters);
 
+        dashboardData.setDownpaymentData(clusterWiseDownPayments);
+
         //------- center wise bar chart
         List<CenterJob> centerJobs = jobRepository.getCenterJobsByProvider(user.getServiceProvider().getId(),
-                CANCEL, TIMEOUT, CommonMethods.getCurrentDate());
+                CANCEL, TIMEOUT, TRANSFER, CommonMethods.getCurrentDate());
 
         List<DashboardData.CenterJobs> centerJobsList = centerJobs.stream().map(
                 e -> DashboardData.CenterJobs.builder().name(e.getName()).jobs(e.getJobs()).build()

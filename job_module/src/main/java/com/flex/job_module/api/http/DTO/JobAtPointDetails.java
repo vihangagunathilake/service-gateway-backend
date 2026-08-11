@@ -19,5 +19,7 @@ public interface JobAtPointDetails {
 
     String getAgent();
 
+    String getAgentImage();
+
     Integer getStatus();
 }

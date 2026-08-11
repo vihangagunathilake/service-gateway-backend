@@ -46,6 +46,9 @@ public class SPServiceImpl implements SPService {
             return CONFLICT("Service provider not found");
         }
 
+        boolean profileImageNotNull = provider.getProfileImage() != null;
+        boolean coverImageNotNull = provider.getCoverPhoto() != null;
+
         return DATA(
                 SPProfile.builder()
                         .id(provider.getId())
@@ -58,8 +61,8 @@ public class SPServiceImpl implements SPService {
                         .status(provider.isActive() ? "Active" : "Restricted")
                         .joinDate(new SimpleDateFormat("MMM dd, yyyy").format(provider.getAddedTime()))
                         .description(provider.getDescription())
-                        .profile(provider.getProfileImage())
-                        .cover(provider.getCoverPhoto())
+                        .profile(profileImageNotNull ? provider.getProfileImage() + "?v=" + System.currentTimeMillis() : null)
+                        .cover(coverImageNotNull ? provider.getCoverPhoto() + "?v=" + System.currentTimeMillis() : null)
                         .build()
         );
     }

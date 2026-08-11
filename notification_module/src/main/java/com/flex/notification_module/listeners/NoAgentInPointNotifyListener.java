@@ -1,20 +1,10 @@
 package com.flex.notification_module.listeners;
-
-import com.flex.common_module.CommonMethods;
 import com.flex.common_module.constants.NotificationConstants;
-import com.flex.job_module.api.http.NotificationEvent;
 import com.flex.job_module.events.NoAgentInPointEvent;
-import com.flex.notification_module.constants.NotificationDescription;
-import com.flex.notification_module.impl.entities.NotificationType;
-import com.flex.notification_module.impl.entities.UserNotification;
-import com.flex.notification_module.impl.repositories.NotificationAccessRepository;
-import com.flex.notification_module.impl.repositories.NotificationTypeRepository;
-import com.flex.notification_module.impl.repositories.UserNotificationRepository;
+import com.flex.notification_module.impl.components.NotificationComponent;
 import com.flex.notification_module.kafka.topics.KafkaNotificationTopics;
 import com.flex.service_module.impl.entities.ServicePoint;
 import com.flex.service_module.impl.repositories.ServicePointRepository;
-import com.flex.user_module.impl.entities.User;
-import com.flex.user_module.impl.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,16 +25,8 @@ import java.util.List;
 public class NoAgentInPointNotifyListener {
 
     private final ServicePointRepository servicePointRepository;
-    private final UserRepository userRepository;
-    private final NotificationTypeRepository notificationTypeRepository;
-    private final NotificationAccessRepository notificationAccessRepository;
-    private final UserNotificationRepository userNotificationRepository;
 
-    @Autowired
-    private SimpMessagingTemplate messagingTemplate;
-
-    @Value("${app.frontend.url}")
-    private String baseUrl;
+    private final NotificationComponent notificationComponent;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -58,71 +40,8 @@ public class NoAgentInPointNotifyListener {
             return;
         }
 
-        // get all users/admin ids from service provider
-        List<Integer> userIds = userRepository
-                .getUserIdsByServiceProvider(servicePoint.getServiceCenter().getServiceProvider().getId());
-
-        // using type find which user has notification access.
-        NotificationType notificationType =
-                notificationTypeRepository.getNotificationTypeByType(
-                        NotificationConstants.NO_AGENT_FOR_JOB
-                );
-
-        if (notificationType == null) {
-            log.warn("Notification type not found");
-            return;
-        }
-
-        List<User> users =
-                notificationAccessRepository.getUsersByIdsAndNotifyType(
-                        userIds,
-                        notificationType.getId()
-                );
-
-
-        if (users.isEmpty()) {
-            log.warn("No users found");
-            return;
-        }
-
-        NotificationType notification = notificationTypeRepository
-                .getNotificationTypeByType(NotificationConstants.NO_AGENT_FOR_JOB);
-
-        if (notification == null) {
-            log.warn("Notification type not found");
-            return;
-        }
-
-        for (User user : users) {
-            UserNotification userNotification = getUserNotification(user, notification, servicePoint);
-
-            userNotificationRepository.save(userNotification);
-
-            NotificationEvent notificationEvent = NotificationEvent.builder()
-                    .userId(user.getId())
-                    .notificationType(NotificationConstants.NO_AGENT_FOR_JOB)
-                    .build();
-
-            messagingTemplate.convertAndSend(
-                    KafkaNotificationTopics.NO_AGENT_IN_POINT_TOPIC + user.getId(),
-                    notificationEvent
-            );
-        }
-    }
-
-    private static UserNotification getUserNotification(User user, NotificationType notification, ServicePoint servicePoint) {
-        UserNotification userNotification = new UserNotification();
-
-        userNotification.setUser(user);
-        userNotification.setNotificationType(notification);
-        userNotification.setCreatedDate(CommonMethods.getCurrentDate());
-        userNotification.setCreatedTime(CommonMethods.getCurrentTime());
-        userNotification.setDescription(NotificationDescription.NO_AGENT
-                + servicePoint.getName() + " in " + servicePoint.getServiceCenter().getName());
-        userNotification.setServicePoint(servicePoint);
-        userNotification.setServiceCenter(servicePoint.getServiceCenter());
-        userNotification.setMarkedAsView(false);
-        userNotification.setMarkedAsRead(false);
-        return userNotification;
+        notificationComponent.send(servicePoint, noAgentInPointEvent.job(),
+                NotificationConstants.NO_AGENT_FOR_JOB,
+                KafkaNotificationTopics.NO_AGENT_IN_POINT_TOPIC);
     }
 }

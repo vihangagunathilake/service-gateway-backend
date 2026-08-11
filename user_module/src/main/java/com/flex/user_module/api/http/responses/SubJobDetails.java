@@ -27,6 +27,7 @@ public class SubJobDetails {
         private String actualStartTime;
         private String actualEndTime;
         private String agent;
+        private String agentImage;
         private Integer status;
     }
 }

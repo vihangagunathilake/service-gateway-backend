@@ -57,6 +57,14 @@ public class SPointServiceImpl implements ServicePointService {
             return CONFLICT("Service center not found");
         }
 
+        if (!serviceCenter.getOpenTime().equals(servicePoint.getOpenTime())) {
+            return CONFLICT("Open time not match with center open time");
+        }
+
+        if (!serviceCenter.getCloseTime().equals(servicePoint.getCloseTime())) {
+            return CONFLICT("Close time not match with center close time");
+        }
+
         if (servicePointRepository.existsByNameAndServiceCenter_IdAndDeletedIsFalse(servicePoint.getName(),
                 serviceCenter.getId())) {
             return CONFLICT("Service point already exists");
@@ -85,6 +93,19 @@ public class SPointServiceImpl implements ServicePointService {
 
         if (existing == null) {
             return CONFLICT("Service point not found");
+        }
+
+        log.info("id: {}", servicePoint.getId());
+
+        log.info("open: {}", servicePoint.getServiceCenter().getOpenTime());
+        log.info("close: {}", servicePoint.getServiceCenter().getCloseTime());
+
+        if (!existing.getServiceCenter().getOpenTime().equals(servicePoint.getOpenTime())) {
+            return CONFLICT("Open time not match with center open time");
+        }
+
+        if (!existing.getServiceCenter().getCloseTime().equals(servicePoint.getCloseTime())) {
+            return CONFLICT("Close time not match with center close time");
         }
 
         if (servicePoint.getName() != null && !servicePoint.getName().isEmpty() && !servicePoint.getName().equals(existing.getName())) {
@@ -129,7 +150,7 @@ public class SPointServiceImpl implements ServicePointService {
             return CONFLICT("Service center not found");
         }
 
-        return DATA(servicePointRepository.servicePointsByCenter(serviceCenterId));
+        return DATA(servicePointRepository.servicePointsByCenterDetailed(serviceCenterId));
     }
 
     @Override

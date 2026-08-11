@@ -1,6 +1,7 @@
 package com.flex.job_module.impl.repositories;
 
 import com.flex.job_module.api.http.DTO.CenterJob;
+import com.flex.job_module.api.http.DTO.ClusterWiseDownPayments;
 import com.flex.job_module.api.http.DTO.DailyJobCounts;
 import com.flex.job_module.api.http.DTO.JobDetailsV1;
 import com.flex.job_module.impl.entities.Job;
@@ -37,6 +38,7 @@ public interface JobRepository extends JpaRepository<Job, Integer> {
                     CASE
                         WHEN j.status <> :cancel
                          AND j.status <> :timeout
+                         AND j.status <> :transferred
                          AND j.appointmentDate=:date
                         THEN 1
                         ELSE 0
@@ -49,17 +51,17 @@ public interface JobRepository extends JpaRepository<Job, Integer> {
         WHERE sc.serviceProvider.id = :provider
         GROUP BY sc.id, sc.name
     """)
-    List<CenterJob> getCenterJobsByProvider(@Param("provider") Integer provider, @Param("cancel") Integer cancel,
+    List<CenterJob> getCenterJobsByProvider(@Param("provider") Integer provider, @Param("cancel") Integer cancel, @Param("transferred") Integer transferred,
                                             @Param("timeout") Integer timeout, @Param("date") LocalDate appointmentDate);
 
     @Query(value = """
-        SELECT SUM(IF(j.status <> :timeout, 1, 0)) AS totalJobs,
+        SELECT COUNT(j.id) AS totalJobs,
             SUM(IF(j.status = :pending, 1, 0)) AS pending,
             SUM(IF(j.status = :serving, 1, 0)) AS serving,
             SUM(IF(j.status = :completed, 1, 0)) AS completed,
             SUM(IF(j.status = :onGoing, 1, 0)) AS onGoing,
             SUM(IF(j.status = :transfer, 1, 0)) AS transferred,
-            SUM(IF(j.status <> :cancel, j.down_payment, 0)) AS totalEarnings
+            SUM(IF(j.status not in (:cancel, :timeout, :transfer), j.down_payment, 0)) AS totalEarnings
         FROM jobs j
         LEFT JOIN service_centers cs
             ON j.service_center_id = cs.id
@@ -76,6 +78,13 @@ public interface JobRepository extends JpaRepository<Job, Integer> {
             @Param("cancel") Integer cancel,
             @Param("timeout") Integer timeout,
             @Param("transfer") Integer transfer);
+
+    @Query("SELECT c.name as service, sum(cs.service.downPrice) as amount " +
+            "FROM Job j LEFT JOIN Cluster c ON j.clusterId = c.id LEFT JOIN ClusterService cs ON c.id = cs.id " +
+            "WHERE j.serviceCenter.serviceProvider.id=:providerId " +
+            "AND j.appointmentDate=current_date " +
+            "GROUP BY j.clusterId")
+    List<ClusterWiseDownPayments> getClusterWiseDownPayments(@Param("providerId") Integer providerId);
 
     @Query("SELECT j.id FROM Job j WHERE j.serviceCenter.serviceProvider.id=:provider AND j.status=:status AND j.appointmentDate=current_date ")
     List<Integer> getJobIdsByStatusAndProvider(@Param("status")Integer status, @Param("provider")Integer provider);

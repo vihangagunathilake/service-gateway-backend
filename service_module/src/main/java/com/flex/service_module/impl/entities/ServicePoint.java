@@ -1,6 +1,7 @@
 package com.flex.service_module.impl.entities;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.flex.common_module.CommonMethods;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -47,6 +48,10 @@ public class ServicePoint {
     @Transient
     private String serviceCenterName;
     @Transient
+    private String open;
+    @Transient
+    private String close;
+    @Transient
     private Long serviceCount;
 
     public ServicePoint(Integer id) {
@@ -70,5 +75,22 @@ public class ServicePoint {
         this.serviceCenterId = serviceCenterId;
         this.serviceCenterName = serviceCenterName;
         this.serviceCount = serviceCount;
+    }
+
+    public ServicePoint(Integer id, String name, String shortName, LocalTime openTime, LocalTime closeTime, boolean temporaryClosed,
+                        boolean deleted, Integer serviceCenterId, String serviceCenterName, Long serviceCount, boolean noLongerAvailable) {
+        this.id = id;
+        this.name = name;
+        this.shortName = shortName;
+        this.openTime = openTime;
+        this.closeTime = closeTime;
+        this.open = CommonMethods.timeFormat(openTime);
+        this.close = CommonMethods.timeFormat(closeTime);
+        this.temporaryClosed = temporaryClosed;
+        this.deleted = deleted;
+        this.serviceCenterId = serviceCenterId;
+        this.serviceCenterName = serviceCenterName;
+        this.serviceCount = serviceCount;
+        this.noLongerAvailable = noLongerAvailable;
     }
 }

@@ -14,4 +14,10 @@ public interface NotificationService {
     ResponseEntity<?> notified(HttpServletRequest request);
 
     ResponseEntity<?> timeoutJobs(HttpServletRequest request);
+
+    ResponseEntity<?> noAgentNotifications(HttpServletRequest request);
+
+    ResponseEntity<?> noAgentMarkAsView(HttpServletRequest request);
+
+    ResponseEntity<?> noAgentMarkAsRead(Integer notificationId, HttpServletRequest request);
 }

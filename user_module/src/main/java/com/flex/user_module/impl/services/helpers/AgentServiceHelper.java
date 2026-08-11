@@ -90,7 +90,7 @@ public class AgentServiceHelper {
     }
 
     public void markTheTokenCompleted(Integer jobId, User agent, String servicePoint) {
-        String note = agent.getFName() + " " + agent.getLName() + " completed the job- "
+        String note = agent.getFName() + " " + agent.getLName() + " completed the job - "
                 + jobId + " related services at " + servicePoint + ".";
 
         jobServiceHelper.markTheTrack(jobId, JobTrackStatus.JOB_COMPLETED, JobTrackStatus.JOB_COMPLETED_S, note);

@@ -484,6 +484,8 @@ public class UserServiceImpl implements UserService {
             }
         }
 
+        boolean profileImageNotNull = user.getProfileImageUrl() != null;
+
         return DATA(
                 HeaderData.builder()
                         .userType(user.getUserType() == 0 ? ADMIN_T
@@ -493,7 +495,7 @@ public class UserServiceImpl implements UserService {
                         .providerId(user.getServiceProvider().getProviderId())
                         .serviceCenter(user.getServiceProvider().getName())
                         .userName(user.getFName())
-                        .image(user.getProfileImageUrl())
+                        .image(profileImageNotNull ? user.getProfileImageUrl() + "?v=" + System.currentTimeMillis() : null)
                         .loggedInPoint(loggedInPoint != null ? loggedInPoint.getName() : null)
                         .loggedInPointId(loggedInPoint != null ? loggedInPoint.getId() : null)
                         .build());
@@ -954,6 +956,9 @@ public class UserServiceImpl implements UserService {
             userType = "USER";
         }
 
+        boolean profileImageNotNull = user.getProfileImageUrl() != null;
+        boolean coverPhotoNotNull = user.getProfileImageUrl() != null;
+
         return DATA(
                 UserProfileData.builder()
                         .fName(user.getFName())
@@ -965,8 +970,8 @@ public class UserServiceImpl implements UserService {
                         .nic(userDetails.getNic() != null ? CryptoUtil.decrypt(userDetails.getNic()) : null)
                         .contact(userDetails.getContact() != null ? CryptoUtil.decrypt(userDetails.getContact()) : null)
                         .joinedDate(new SimpleDateFormat("MMM dd, yyyy").format(userDetails.getAddedTime()))
-                        .profileImageUrl(user.getProfileImageUrl())
-                        .coverImageUrl(user.getCoverImageUrl())
+                        .profileImageUrl(profileImageNotNull ? CommonMethods.nonCachedImage(user.getProfileImageUrl()) : null)
+                        .coverImageUrl(coverPhotoNotNull ? CommonMethods.nonCachedImage(user.getCoverImageUrl()) : null)
                         .build());
     }
 
@@ -1249,6 +1254,7 @@ public class UserServiceImpl implements UserService {
         boolean timeoutJob = false;
         boolean inServing = false;
         boolean completed = false;
+        boolean onGoing = false;
         int downPayment = 0;
 
         List<String> pointNames = new ArrayList<>();
@@ -1267,7 +1273,7 @@ public class UserServiceImpl implements UserService {
                 } else if (jobAtPoint.getStatus() == JobStatus.IN_SERVICE) {
                     inServing = true;
                 } else if (jobAtPoint.getStatus() == JobStatus.PENDING && completed) {
-                    timeoutJob = true;
+                    onGoing = true;
                 } else {
                     if (jobAtPoint.getStatus() == JobStatus.COMPLETED) {
                         completed = true;
@@ -1296,6 +1302,7 @@ public class UserServiceImpl implements UserService {
                                 ? CommonMethods.timeFormat(jobAtPoint.getEndTime().toString())
                                 : null)
                         .agent(jobAtPoint.getAgent() != null ? jobAtPoint.getAgent() : null)
+                        .agentImage(jobAtPoint.getAgentImage() != null ? CommonMethods.nonCachedImage(jobAtPoint.getAgentImage()) : null)
                         .status(jobAtPoint.getStatus())
                         .build();
 
@@ -1313,6 +1320,8 @@ public class UserServiceImpl implements UserService {
             jobStatus = "Serving";
         } else if (timeoutJob) {
             jobStatus = "Timeout";
+        } else if (onGoing) {
+            jobStatus = "On Going";
         } else {
             if (completed) {
                 jobStatus = "Completed";

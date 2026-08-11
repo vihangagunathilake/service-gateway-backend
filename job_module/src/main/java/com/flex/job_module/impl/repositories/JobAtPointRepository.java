@@ -32,6 +32,7 @@ public interface JobAtPointRepository extends JpaRepository<JobAtPoint, Integer>
             MIN(aj.start_time) AS startedTime,
             MAX(aj.end_time) AS endTime,
             CONCAT(u.f_name, ' ',u.l_name) AS agent,
+            u.profile_image_url AS agentImage,
             jp.status
             #CASE
             #   WHEN SUM(CASE WHEN jp.status = 1 THEN 1 ELSE 0 END) > 0 THEN 1
@@ -91,12 +92,21 @@ public interface JobAtPointRepository extends JpaRepository<JobAtPoint, Integer>
             @Param("id") Integer job,
             @Param("date") LocalDate appointmentDate);
 
-    @Query("SELECT new JobAtPoint(jp.job.id, min(jp.startTime), max(jp.endTime)) " +
-            "FROM JobAtPoint jp " +
-            "WHERE jp.servicePoint.id = :id AND jp.job.appointmentDate=:date " +
-            "GROUP BY jp.job ORDER BY jp.startTime")
-    List<JobAtPoint> getCompressedJobsByPoint(@Param("id") Integer servicePointId,
-                                              @Param("date") LocalDate appointmentDate);
+    @Query("""
+        SELECT new JobAtPoint(
+            jp.job.id,
+            MIN(jp.startTime),
+            MAX(jp.endTime)
+        )
+        FROM JobAtPoint jp
+        WHERE jp.servicePoint.id = :id
+          AND jp.job.appointmentDate = :date
+        GROUP BY jp.job.id
+        ORDER BY MIN(jp.startTime)
+    """)
+    List<JobAtPoint> getCompressedJobsByPoint(
+            @Param("id") Integer servicePointId,
+            @Param("date") LocalDate appointmentDate);
 
     @Query("""
        SELECT j

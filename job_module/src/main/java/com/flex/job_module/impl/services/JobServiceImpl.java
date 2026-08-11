@@ -16,12 +16,15 @@ import com.flex.job_module.constants.JobStatus;
 import com.flex.job_module.constants.JobTrackStatus;
 import com.flex.job_module.constants.JobTypes;
 import com.flex.job_module.events.NoAgentInPointEvent;
+import com.flex.job_module.events.kafka.CustomerArrivedTrigger;
 import com.flex.job_module.impl.entities.Customer;
 import com.flex.job_module.impl.entities.Job;
 import com.flex.job_module.impl.entities.JobAtPoint;
+import com.flex.job_module.impl.entities.JobTrack;
 import com.flex.job_module.impl.repositories.CustomerRepository;
 import com.flex.job_module.impl.repositories.JobAtPointRepository;
 import com.flex.job_module.impl.repositories.JobRepository;
+import com.flex.job_module.impl.repositories.JobTrackRepository;
 import com.flex.job_module.impl.services.algorithm.PrepareJobSubMethods;
 import com.flex.job_module.impl.services.helper.*;
 import com.flex.service_module.impl.entities.*;
@@ -67,6 +70,7 @@ public class JobServiceImpl implements JobService {
     private final JobAtPointRepository jobAtPointRepository;
     private final JobRepository jobRepository;
     private final ServicePointRepository servicePointRepository;
+    private final JobTrackRepository jobTrackRepository;
 
     private final JobServiceHelper jobServiceHelper;
     private final ServicesRepository servicesRepository;
@@ -1315,6 +1319,12 @@ public class JobServiceImpl implements JobService {
 
         List<JobAtPoint> jobsAtPoint = jobAtPointRepository.findAllByJobIdAndDummyEntityIsTrue(jobId);
 
+        List<JobTrack> jobTracks = jobTrackRepository.findAllByJob_id(jobId);
+
+        if (!jobTracks.isEmpty()) {
+            jobTrackRepository.deleteAll(jobTracks);
+        }
+
         if (!jobsAtPoint.isEmpty()) {
             jobAtPointRepository.deleteAll(jobsAtPoint);
             jobAtPointRepository.flush();
@@ -1524,21 +1534,29 @@ public class JobServiceImpl implements JobService {
 
         List<JobAtPoint> jobsAtPoints = jobAtPointRepository.findAllByJobId(jobId);
 
-        //get the first job(going to be next). Check it's point has an agent now.
-        //if not send notifications to admins and managers.
+        boolean customerWaiting = false;
         Integer loginAgentId = servicePointRepository
                 .loginAgentAtPoint(jobsAtPoints.getFirst().getServicePoint().getId());
 
-        log.info("loginAgentId: {}", loginAgentId);
+        //get the first job(going to be next). Check it's point has an agent now.
+        //if not send notifications to admins and managers.
+        if (CommonMethods.getCurrentTime().isAfter(jobsAtPoints.getFirst().getStartTime())) {
 
-        //if not agent in point, create an event to notify this for notification module
-        //it will send notifications for management.
-        if (loginAgentId == null) {
-            publisher.publishEvent(
-                    new NoAgentInPointEvent(
-                            jobsAtPoints.getFirst().getServicePoint().getId()
-                    )
-            );
+            //todo: in customer's side, he can make a request he is waiting. In that case make this below event.
+
+            //if not agent in point, create an event to notify this for notification module
+            //it will send notifications for management.
+            if (loginAgentId == null) {
+
+                customerWaiting = true;
+
+                publisher.publishEvent(
+                        new NoAgentInPointEvent(
+                                jobsAtPoints.getFirst().getServicePoint().getId(),
+                                job
+                        )
+                );
+            }
         }
 
         for (JobAtPoint jobAtPoint : jobsAtPoints) {
@@ -1549,15 +1567,24 @@ public class JobServiceImpl implements JobService {
         }
 
         String note = "Customer has arrived at "
-                + CommonMethods.getCurrentTime()
+                + CommonMethods.timeFormat(CommonMethods.getCurrentTime())
                 + " to "
                 + job.getServiceCenter().getName() + ".";
 
-        if (loginAgentId == null) {
+        if (customerWaiting) {
             note = note + " But no agent were already logged in to the " + jobsAtPoints.getFirst().getServicePoint().getName();
         }
 
         jobServiceHelper.markTheTrack(job.getId(), JobTrackStatus.CUSTOMER_ARRIVED, JobTrackStatus.CUSTOMER_ARRIVED_S, note);
+
+        if (loginAgentId != null) {
+            publisher.publishEvent(
+                    new CustomerArrivedTrigger(
+                            jobsAtPoints.getFirst().getServicePoint().getId(),
+                            loginAgentId
+                    )
+            );
+        }
 
         return SUCCESS("Customer arrived for " + job.getId());
     }

@@ -7,6 +7,8 @@ import com.flex.common_module.security.utils.JwtUtil;
 import com.flex.job_module.constants.JobStatus;
 import com.flex.job_module.impl.repositories.JobRepository;
 import com.flex.notification_module.api.services.NotificationService;
+import com.flex.notification_module.impl.entities.NotificationType;
+import com.flex.notification_module.impl.entities.UserNotification;
 import com.flex.notification_module.impl.repositories.NotificationTypeRepository;
 import com.flex.notification_module.impl.repositories.RoleNotificationRepository;
 import com.flex.notification_module.impl.repositories.UserNotificationRepository;
@@ -132,5 +134,86 @@ public class NotificationServiceImpl implements NotificationService {
                     user.getServiceProvider().getId()));
         }
         return DATA(0);
+    }
+
+    @Override
+    public ResponseEntity<?> noAgentNotifications(HttpServletRequest request) {
+        log.info(request.getRequestURI());
+
+        UserClaims userClaims = JwtUtil.getClaimsFromToken(request);
+
+        if (userClaims == null || userClaims.getUserId() == null) {
+            return CONFLICT("User not found");
+        }
+
+        User user = userRepository.findByIdAndDeletedIsFalse(userClaims.getUserId());
+
+        if (user == null) {
+            return CONFLICT("User not found");
+        }
+
+        NotificationType notificationType = notificationTypeRepository
+                .getNotificationTypeByType(NotificationConstants.NO_AGENT_FOR_JOB);
+
+        if (notificationType == null) {
+            return CONFLICT("Notification type not found");
+        }
+
+        return DATA(userNotificationRepository
+                .getNoAgentNotificationsDetailsByUserId(user.getId(), notificationType.getId(), CommonMethods.getCurrentDate()));
+    }
+
+    @Override
+    public ResponseEntity<?> noAgentMarkAsView(HttpServletRequest request) {
+        log.info(request.getRequestURI());
+
+        UserClaims userClaims = JwtUtil.getClaimsFromToken(request);
+
+        if (userClaims == null || userClaims.getUserId() == null) {
+            return CONFLICT("User not found");
+        }
+
+        User user = userRepository.findByIdAndDeletedIsFalse(userClaims.getUserId());
+
+        if (user == null) {
+            return CONFLICT("User not found");
+        }
+
+        NotificationType notificationType = notificationTypeRepository
+                .getNotificationTypeByType(NotificationConstants.NO_AGENT_FOR_JOB);
+
+        if (notificationType == null) {
+            return CONFLICT("Notification type not found");
+        }
+
+        List<UserNotification> userNotifications = userNotificationRepository
+                .getNoAgentNotificationsByUserId(user.getId(), notificationType.getId());
+
+        for (UserNotification userNotification : userNotifications) {
+            userNotification.setMarkedAsView(true);
+
+            userNotificationRepository.save(userNotification);
+        }
+
+        return SUCCESS(" ");
+    }
+
+    @Override
+    public ResponseEntity<?> noAgentMarkAsRead(Integer notificationId, HttpServletRequest request) {
+        log.info(request.getRequestURI());
+
+        UserNotification userNotification = userNotificationRepository
+                .findByIdAndAlreadySolvedIsFalseAndMarkedAsReadIsFalse(notificationId);
+
+        if (userNotification == null) {
+            return CONFLICT("Notification not found");
+        }
+
+        userNotification.setMarkedAsView(true);
+        userNotification.setMarkedAsRead(true);
+
+        userNotificationRepository.save(userNotification);
+
+        return SUCCESS(" ");
     }
 }

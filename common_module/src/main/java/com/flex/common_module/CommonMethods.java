@@ -44,4 +44,8 @@ public class CommonMethods {
     public static LocalTime secondsToLocalTime(long seconds) {
         return LocalTime.ofSecondOfDay(seconds);
     }
+
+    public static String nonCachedImage(String url) {
+        return url + "?v=" + System.currentTimeMillis();
+    }
 }

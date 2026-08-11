@@ -279,6 +279,8 @@ public class PrepareJobSubMethods {
                             return null;
                         }
                         nextStartTime = freeSlotStartTime;
+                    } else {
+                        return null;
                     }
 
                     return TimeSlot.builder()
@@ -335,6 +337,8 @@ public class PrepareJobSubMethods {
             return lastStartTime;
         }
 
+        log.info("last start time ---- :{}", lastStartTime);
+
         while (i < previousJobs.size() - 1) {
             JobAtPoint firstJob = previousJobs.get(i);
             JobAtPoint secondJob = previousJobs.get(i + 1);
@@ -352,6 +356,10 @@ public class PrepareJobSubMethods {
                             CommonMethods.secondsToLocalTime(totalServiceTimeForNoJobsServices),
                     servicePointCloseTime);
 
+            if (possibleEndTime == null) {
+                return null;
+            }
+
             boolean intervalMatchBetweenFirstAndSecondJob = !startTime.isBefore(firstJob.getEndTime())
                     && !possibleEndTime.isAfter(secondJob.getStartTime());
 
@@ -367,7 +375,9 @@ public class PrepareJobSubMethods {
             i++;
         }
 
-        if (i == 0 && previousJobs.size() == 1) {
+        boolean lastJobEndedBeforeNowServingTime = previousJobs.getFirst().getEndTime().isBefore(lastStartTime);
+
+        if (i == 0 && previousJobs.size() == 1 && !lastJobEndedBeforeNowServingTime) {
             log.info("after the only job: {}", previousJobs.getFirst().getEndTime());
             return previousJobs.getFirst().getEndTime();
         }

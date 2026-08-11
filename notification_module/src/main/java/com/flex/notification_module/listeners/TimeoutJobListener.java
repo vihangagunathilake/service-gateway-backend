@@ -6,6 +6,9 @@ import com.flex.job_module.events.JobTimedOutEvent;
 import com.flex.job_module.impl.entities.Job;
 import com.flex.job_module.impl.repositories.JobRepository;
 import com.flex.job_module.impl.services.helper.JobServiceHelper;
+import com.flex.notification_module.impl.components.NoAgentNotification;
+import com.flex.notification_module.impl.entities.UserNotification;
+import com.flex.notification_module.impl.repositories.UserNotificationRepository;
 import com.flex.user_module.impl.entities.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.util.List;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -24,18 +29,27 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class TimeoutJobListener {
 
     private final JobServiceHelper jobServiceHelper;
+    private final NoAgentNotification noAgentNotification;
 
-    @Autowired
-    private SimpMessagingTemplate messagingTemplate;
+    private final JobRepository jobRepository;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendNotificationsToManagement(JobTimedOutEvent jobTimedOutEvent) {
 
+        Job job = jobRepository.getJobById(jobTimedOutEvent.jobId());
+
+        if (job == null) {
+            log.warn("Job not found from {}", jobTimedOutEvent.jobId());
+            return;
+        }
+
+        noAgentNotification.solveNoAgentNotification(job);
+
         String note = "This appointment(Job-" + jobTimedOutEvent.jobId()
                 + ") has been timed out in "
                 + CommonMethods.getCurrentDate()
-                + " at " + CommonMethods.getCurrentTime();
+                + " at " + CommonMethods.timeFormat(CommonMethods.getCurrentTime());
 
         jobServiceHelper.markTheTrack(jobTimedOutEvent.jobId(), JobTrackStatus.TIMEOUT, JobTrackStatus.TIMEOUT_S, note);
     }

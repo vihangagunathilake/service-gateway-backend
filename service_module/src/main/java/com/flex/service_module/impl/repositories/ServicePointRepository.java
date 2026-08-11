@@ -34,6 +34,18 @@ public interface ServicePointRepository extends JpaRepository<ServicePoint, Inte
             "        s.id, s.name")
     List<ServicePoint> servicePointsByCenter(@Param("serviceCenterId") Integer serviceCenterId);
 
+    @Query("SELECT new ServicePoint(s.id, s.name, s.shortName, s.openTime, s.closeTime, s.temporaryClosed, s.deleted, " +
+            "s.serviceCenter.id, s.serviceCenter.name, COUNT(av.service.id), s.noLongerAvailable) " +
+            "FROM ServicePoint s " +
+            "LEFT JOIN AvailableService av ON av.servicePoint.id = s.id " +
+            "WHERE s.serviceCenter.id=:serviceCenterId and s.deleted is false " +
+            "GROUP BY " +
+            "        s.id, s.name, s.shortName, " +
+            "        s.openTime, s.closeTime, " +
+            "        s.temporaryClosed, s.deleted, " +
+            "        s.id, s.name")
+    List<ServicePoint> servicePointsByCenterDetailed(@Param("serviceCenterId") Integer serviceCenterId);
+
     @Query("SELECT new ServicePoint(s.id, s.name) " +
             "FROM ServicePoint s " +
             "WHERE s.serviceCenter.id=:serviceCenterId and s.deleted is false")
@@ -82,10 +94,10 @@ public interface ServicePointRepository extends JpaRepository<ServicePoint, Inte
     );
 
     @Query("""
-        SELECT al.user.id
+        SELECT al.id
         FROM AgentLogin al
         WHERE al.servicePoint.id = :servicePointId
-          AND al.loginTime = current_date()
+          AND al.loginDate = current_date()
           AND al.logoutTime IS NULL
     """)
     Integer loginAgentAtPoint(@Param("servicePointId") Integer servicePointId);

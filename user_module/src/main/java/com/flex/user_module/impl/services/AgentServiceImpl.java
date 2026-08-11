@@ -17,6 +17,9 @@ import com.flex.user_module.api.http.responses.AgentDetails;
 import com.flex.user_module.api.http.responses.AgentJobInfo;
 import com.flex.user_module.api.http.responses.AgentNextJob;
 import com.flex.user_module.api.services.AgentService;
+import com.flex.user_module.events.AgentLoginEvent;
+import com.flex.user_module.events.JobServingEvent;
+import com.flex.user_module.events.RoleCreatedEvent;
 import com.flex.user_module.impl.entities.AgentJob;
 import com.flex.user_module.impl.entities.AgentLogin;
 import com.flex.user_module.impl.entities.User;
@@ -27,8 +30,10 @@ import com.flex.user_module.impl.services.helpers.AgentServiceHelper;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -55,6 +60,8 @@ public class AgentServiceImpl implements AgentService {
     private final JobRepository jobRepository;
 
     private final AgentServiceHelper agentServiceHelper;
+
+    private final ApplicationEventPublisher publisher;
 
     @Override
     public ResponseEntity<?> authenticate(HttpServletRequest request) {
@@ -276,6 +283,7 @@ public class AgentServiceImpl implements AgentService {
     //todo this service may change according to settings or configuration
     // this is by default serving for all services at once. But there can be single jobs at point serving as well.
     // so prepare for that
+    @Transactional
     @Override
     public ResponseEntity<?> servingJob(AgentServing agentServing, HttpServletRequest request) {
         log.info(request.getRequestURI());
@@ -329,6 +337,14 @@ public class AgentServiceImpl implements AgentService {
                 jobRepository.save(job);
                 jobAtPointRepository.save(jobAtPoint);
                 agentServiceHelper.servingJob(jobAtPoint, agent, status);
+
+                publisher.publishEvent(
+                        new AgentLoginEvent(
+                                servicePoint,
+                                job
+                        )
+                );
+
             } else if (jobAtPoint.getStatus() == IN_SERVICE) {
                 status = COMPLETED;
                 jobStatus = status;
@@ -350,17 +366,24 @@ public class AgentServiceImpl implements AgentService {
             }
         }
 
-        agentServiceHelper.markTheAgentLogin(job.getId(), agent);
-
         String responseMessage = null;
 
         if (status == IN_SERVICE) {
+
+            agentServiceHelper.markTheAgentLogin(job.getId(), agent);
+
             responseMessage = job.getId() + " in serving";
             agentServiceHelper.markTheTokenInServing(job.getId(), agent, servicePoint.getName());
         } else if (status == COMPLETED) {
             responseMessage = job.getId() + " completed";
             agentServiceHelper.markTheTokenCompleted(job.getId(), agent, servicePoint.getName());
         }
+
+        publisher.publishEvent(
+                new JobServingEvent(
+                        servicePoint.getServiceCenter().getServiceProvider().getId()
+                )
+        );
 
         return SUCCESS(responseMessage);
     }

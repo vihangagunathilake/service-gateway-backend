@@ -6,12 +6,15 @@ import com.flex.common_module.security.utils.JwtUtil;
 import com.flex.dashboard_module.api.http.response.DashboardData;
 import com.flex.dashboard_module.api.services.DashboardService;
 import com.flex.job_module.api.http.DTO.CenterJob;
-import com.flex.job_module.api.http.DTO.ClusterWiseDownPayments;
 import com.flex.job_module.api.http.DTO.DailyJobCounts;
+import com.flex.job_module.api.http.DTO.classes.ClusterWiseDownPayments;
 import com.flex.job_module.constants.JobStatus;
+import com.flex.job_module.impl.entities.Job;
 import com.flex.job_module.impl.entities.JobAtPoint;
 import com.flex.job_module.impl.repositories.JobAtPointRepository;
 import com.flex.job_module.impl.repositories.JobRepository;
+import com.flex.service_module.impl.entities.Cluster;
+import com.flex.service_module.impl.repositories.ClusterRepository;
 import com.flex.service_module.impl.repositories.ServiceCenterRepository;
 import com.flex.service_module.impl.repositories.ServicePointRepository;
 import com.flex.user_module.constants.UserConstant;
@@ -25,7 +28,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static com.flex.common_module.http.ReturnResponse.*;
 import static com.flex.job_module.constants.JobStatus.*;
@@ -48,6 +54,7 @@ public class DashboardServiceImpl implements DashboardService {
     private final AgentLoginRepository agentLoginRepository;
     private final ServiceCenterRepository serviceCenterRepository;
     private final JobAtPointRepository jobAtPointRepository;
+    private final ClusterRepository clusterRepository;
 
     @Override
     public ResponseEntity<?> dailyDashboard(HttpServletRequest request) {
@@ -130,7 +137,61 @@ public class DashboardServiceImpl implements DashboardService {
         //todo: in future may be multiple agents can login to the same point. in that case this will change
         int agentLoginCount = agentLoginRepository.getAgentLoginCountByServiceProvider(user.getServiceProvider().getId());
 
-        List<ClusterWiseDownPayments> clusterWiseDownPayments = jobRepository.getClusterWiseDownPayments(user.getServiceProvider().getId());
+        List<ClusterWiseDownPayments> clusterWiseDownPayments = new ArrayList<>();
+
+        Map<String, Integer> servicesWithTime = new HashMap<>();
+
+        List<Job> jobList = jobRepository
+                .getAllJobsByProviderId(user.getServiceProvider().getId());
+
+        for (Job job : jobList) {
+
+            if (job.getClusterId() == null) {
+                if (servicesWithTime.containsKey("Custom")) {
+                    Integer downAmount = servicesWithTime.get("Custom");
+
+                    downAmount = downAmount + job.getDownPayment();
+                    servicesWithTime.put("Custom", downAmount);
+                } else {
+                    String service = "Custom";
+
+                    servicesWithTime.put(service, job.getDownPayment());
+                }
+            } else {
+                Cluster cluster = clusterRepository
+                        .findByIdAndDeletedIsFalse(job.getClusterId());
+
+                if (servicesWithTime.containsKey(cluster.getName())) {
+                    Integer downAmount = servicesWithTime.get(cluster.getName());
+
+                    downAmount = downAmount + job.getDownPayment();
+                    servicesWithTime.put(cluster.getName(), downAmount);
+                } else {
+                    servicesWithTime.put(cluster.getName(), job.getDownPayment());
+                }
+            }
+        }
+
+        servicesWithTime.forEach((service, amount) -> {
+
+            Integer jobCount;
+
+            if (service.equals("Custom")) {
+                jobCount = jobRepository.getCustomJobCountByCluster(COMPLETED);
+            } else {
+                Integer clusterId = clusterRepository.getClusterIdByName(service);
+
+                jobCount = jobRepository.getJobCountByCluster(clusterId, COMPLETED);
+            }
+
+            ClusterWiseDownPayments clusterWiseDownPayment = ClusterWiseDownPayments.builder()
+                    .service(service)
+                    .amount(amount)
+                    .jobCount(jobCount)
+                    .build();
+
+            clusterWiseDownPayments.add(clusterWiseDownPayment);
+        });
 
         DashboardData.OperationalCenters operationalCenters = DashboardData.OperationalCenters.builder()
                 .active(activeCenters)

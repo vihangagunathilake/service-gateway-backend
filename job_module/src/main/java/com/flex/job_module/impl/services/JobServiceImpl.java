@@ -1619,6 +1619,7 @@ public class JobServiceImpl implements JobService {
         // create new dummy job
         Job newDummyJob = Job.builder()
                 .customer(job.getCustomer())
+                .clusterId(job.getClusterId())
                 .serviceCenter(serviceCenter)
                 .transferedJob(job)
                 .appointmentDate(transferJob.getNextAppointmentDate())

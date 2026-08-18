@@ -57,7 +57,7 @@ public interface UserRepository extends JpaRepository<User, Integer> {
                     " LEFT JOIN u.role r " +
                     " LEFT JOIN u.serviceCenter sc " +
                     "WHERE u.deleted = false AND u.id <> :userId " +
-                    " AND u.userType <> 1 " +
+                    " AND u.userType <> 0 " +
                     " AND u.serviceProvider.id = :serviceProviderId " +
                     " AND ( " +
                     "   LOWER(u.fName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +

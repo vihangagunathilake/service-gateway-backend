@@ -1,7 +1,6 @@
 package com.flex.job_module.impl.repositories;
 
 import com.flex.job_module.api.http.DTO.CenterJob;
-import com.flex.job_module.api.http.DTO.ClusterWiseDownPayments;
 import com.flex.job_module.api.http.DTO.DailyJobCounts;
 import com.flex.job_module.api.http.DTO.JobDetailsV1;
 import com.flex.job_module.impl.entities.Job;
@@ -26,6 +25,13 @@ public interface JobRepository extends JpaRepository<Job, Integer> {
             "WHERE j.serviceCenter.id=:centerId and j.appointmentDate=:appointmentDate")
     List<JobDetailsV1> getJobDetailsLimitedData(@Param("centerId") Integer centerId,
                                                 @Param("appointmentDate") LocalDate appointmentDate);
+
+    @Query("SELECT count(j.id) FROM Job j WHERE j.clusterId = :clusterId AND j.status = :completed AND j.appointmentDate = current_date ")
+    Integer getJobCountByCluster(@Param("clusterId") Integer clusterId,
+                                 @Param("completed") Integer completed);
+
+    @Query("SELECT count(j.id) FROM Job j WHERE j.clusterId is null AND j.status = :completed AND j.appointmentDate = current_date ")
+    Integer getCustomJobCountByCluster(@Param("completed") Integer completed);
 
     @Query("SELECT count(j) FROM Job j WHERE j.serviceCenter.serviceProvider.id=:provider AND j.status=:status")
     Integer getJobCountByStatusAndCenter(@Param("status")Integer status, @Param("provider")Integer provider);
@@ -79,12 +85,12 @@ public interface JobRepository extends JpaRepository<Job, Integer> {
             @Param("timeout") Integer timeout,
             @Param("transfer") Integer transfer);
 
-    @Query("SELECT c.name as service, sum(cs.service.downPrice) as amount " +
-            "FROM Job j LEFT JOIN Cluster c ON j.clusterId = c.id LEFT JOIN ClusterService cs ON c.id = cs.id " +
+    @Query("SELECT j " +
+            "FROM Job j " +
             "WHERE j.serviceCenter.serviceProvider.id=:providerId " +
             "AND j.appointmentDate=current_date " +
             "GROUP BY j.clusterId")
-    List<ClusterWiseDownPayments> getClusterWiseDownPayments(@Param("providerId") Integer providerId);
+    List<Job> getAllJobsByProviderId(@Param("providerId") Integer providerId);
 
     @Query("SELECT j.id FROM Job j WHERE j.serviceCenter.serviceProvider.id=:provider AND j.status=:status AND j.appointmentDate=current_date ")
     List<Integer> getJobIdsByStatusAndProvider(@Param("status")Integer status, @Param("provider")Integer provider);

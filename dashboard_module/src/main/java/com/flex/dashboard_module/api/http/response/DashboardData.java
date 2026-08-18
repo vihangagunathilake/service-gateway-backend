@@ -1,6 +1,6 @@
 package com.flex.dashboard_module.api.http.response;
 
-import com.flex.job_module.api.http.DTO.ClusterWiseDownPayments;
+import com.flex.job_module.api.http.DTO.classes.ClusterWiseDownPayments;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -71,6 +71,7 @@ public class DashboardData {
     public static class CenterJobs {
         private String name;
         private Integer jobs;
+        private Integer count;
     }
 
 }
